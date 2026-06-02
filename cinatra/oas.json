@@ -1,0 +1,479 @@
+{
+  "agentspec_version": "26.1.0",
+  "component_type": "Flow",
+  "id": "blog-linkedin-publish-agent-flow",
+  "name": "Blog LinkedIn Publish Agent",
+  "description": "Adapts a Cinatra blog post into a LinkedIn post, pauses at a HITL gate for operator review/edit, persists edits via blog_post_publish_linkedin_update (refs only — agent materializes via artifact_authoring_emit first), then publishes via blog_post_publish_linkedin_publish. linkedinDrafts[] entries carry contentArtifactId + contentRepresentationRevisionId refs (@cinatra-ai/blog-post-artifact); agent resolves copy via artifact_representation_get for the HITL renderer. Returns the linkedinPostUrl.",
+  "metadata": {
+    "cinatra": {
+      "type": "flow",
+      "packageName": "@cinatra-ai/blog-linkedin-publish-agent",
+      "packageVersion": "0.1.1",
+      "hitlScreens": [
+        "@cinatra-ai/blog-linkedin-publish-agent:draft-review"
+      ],
+      "llm": {
+        "preferredProvider": "openai",
+        "preferredModel": "gpt-5.5"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "title": "projectId",
+      "type": "string"
+    },
+    {
+      "title": "postId",
+      "type": "string"
+    },
+    {
+      "title": "linkedinAccountId",
+      "type": "string"
+    },
+    {
+      "title": "linkedinAccountName",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "title": "destinationType",
+      "type": "string",
+      "json_schema": {
+        "enum": [
+          "member",
+          "organization"
+        ]
+      }
+    },
+    {
+      "title": "destinationId",
+      "type": "string"
+    },
+    {
+      "title": "destinationName",
+      "type": "string"
+    },
+    {
+      "title": "blogPostUrl",
+      "type": "string"
+    }
+  ],
+  "outputs": [
+    {
+      "title": "projectId",
+      "type": "string"
+    },
+    {
+      "title": "postId",
+      "type": "string"
+    },
+    {
+      "title": "linkedinDraftId",
+      "type": "string"
+    },
+    {
+      "title": "linkedinPostUrl",
+      "type": "string"
+    },
+    {
+      "title": "approved",
+      "type": "boolean"
+    },
+    {
+      "title": "summary",
+      "type": "string"
+    }
+  ],
+  "start_node": {
+    "$component_ref": "start"
+  },
+  "nodes": [
+    {
+      "$component_ref": "start"
+    },
+    {
+      "$component_ref": "publish"
+    },
+    {
+      "$component_ref": "end"
+    }
+  ],
+  "control_flow_connections": [
+    {
+      "component_type": "ControlFlowEdge",
+      "name": "start_to_publish",
+      "from_node": {
+        "$component_ref": "start"
+      },
+      "to_node": {
+        "$component_ref": "publish"
+      }
+    },
+    {
+      "component_type": "ControlFlowEdge",
+      "name": "publish_to_end",
+      "from_node": {
+        "$component_ref": "publish"
+      },
+      "to_node": {
+        "$component_ref": "end"
+      }
+    }
+  ],
+  "data_flow_connections": [
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_projectId_to_publish_projectId",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "projectId",
+      "destination_node": {
+        "$component_ref": "publish"
+      },
+      "destination_input": "projectId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_postId_to_publish_postId",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "postId",
+      "destination_node": {
+        "$component_ref": "publish"
+      },
+      "destination_input": "postId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_linkedinAccountId_to_publish_linkedinAccountId",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "linkedinAccountId",
+      "destination_node": {
+        "$component_ref": "publish"
+      },
+      "destination_input": "linkedinAccountId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_linkedinAccountName_to_publish_linkedinAccountName",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "linkedinAccountName",
+      "destination_node": {
+        "$component_ref": "publish"
+      },
+      "destination_input": "linkedinAccountName"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_destinationType_to_publish_destinationType",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "destinationType",
+      "destination_node": {
+        "$component_ref": "publish"
+      },
+      "destination_input": "destinationType"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_destinationId_to_publish_destinationId",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "destinationId",
+      "destination_node": {
+        "$component_ref": "publish"
+      },
+      "destination_input": "destinationId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_destinationName_to_publish_destinationName",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "destinationName",
+      "destination_node": {
+        "$component_ref": "publish"
+      },
+      "destination_input": "destinationName"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_blogPostUrl_to_publish_blogPostUrl",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "blogPostUrl",
+      "destination_node": {
+        "$component_ref": "publish"
+      },
+      "destination_input": "blogPostUrl"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "publish_projectId_to_end_projectId",
+      "source_node": {
+        "$component_ref": "publish"
+      },
+      "source_output": "projectId",
+      "destination_node": {
+        "$component_ref": "end"
+      },
+      "destination_input": "projectId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "publish_postId_to_end_postId",
+      "source_node": {
+        "$component_ref": "publish"
+      },
+      "source_output": "postId",
+      "destination_node": {
+        "$component_ref": "end"
+      },
+      "destination_input": "postId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "publish_linkedinDraftId_to_end_linkedinDraftId",
+      "source_node": {
+        "$component_ref": "publish"
+      },
+      "source_output": "linkedinDraftId",
+      "destination_node": {
+        "$component_ref": "end"
+      },
+      "destination_input": "linkedinDraftId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "publish_linkedinPostUrl_to_end_linkedinPostUrl",
+      "source_node": {
+        "$component_ref": "publish"
+      },
+      "source_output": "linkedinPostUrl",
+      "destination_node": {
+        "$component_ref": "end"
+      },
+      "destination_input": "linkedinPostUrl"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "publish_approved_to_end_approved",
+      "source_node": {
+        "$component_ref": "publish"
+      },
+      "source_output": "approved",
+      "destination_node": {
+        "$component_ref": "end"
+      },
+      "destination_input": "approved"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "publish_summary_to_end_summary",
+      "source_node": {
+        "$component_ref": "publish"
+      },
+      "source_output": "summary",
+      "destination_node": {
+        "$component_ref": "end"
+      },
+      "destination_input": "summary"
+    }
+  ],
+  "$referenced_components": {
+    "start": {
+      "component_type": "StartNode",
+      "id": "start",
+      "name": "Inputs",
+      "metadata": {
+        "cinatra": {
+          "required": [
+            "projectId",
+            "postId",
+            "linkedinAccountId",
+            "destinationType",
+            "destinationId",
+            "destinationName",
+            "blogPostUrl"
+          ],
+          "hidden": [
+            "linkedinAccountName"
+          ]
+        }
+      },
+      "inputs": [
+        {
+          "title": "projectId",
+          "type": "string"
+        },
+        {
+          "title": "postId",
+          "type": "string"
+        },
+        {
+          "title": "linkedinAccountId",
+          "type": "string"
+        },
+        {
+          "title": "linkedinAccountName",
+          "type": "string",
+          "default": ""
+        },
+        {
+          "title": "destinationType",
+          "type": "string",
+          "json_schema": {
+            "enum": [
+              "member",
+              "organization"
+            ]
+          }
+        },
+        {
+          "title": "destinationId",
+          "type": "string"
+        },
+        {
+          "title": "destinationName",
+          "type": "string"
+        },
+        {
+          "title": "blogPostUrl",
+          "type": "string"
+        }
+      ]
+    },
+    "publish": {
+      "component_type": "ApiNode",
+      "id": "publish",
+      "name": "LinkedIn publish orchestration via cinatra-mcp",
+      "url": "{{CINATRA_BASE_URL}}/api/llm-bridge",
+      "http_method": "POST",
+      "data": {
+        "agent_id": "blog-linkedin-publish-agent",
+        "system": "You are a blog-LinkedIn-publish orchestrator. Follow SKILL.md step-by-step. Pause at HITL Gate `:draft-review` so the operator can approve / edit / reject the generated post. Each linkedinDrafts[] entry carries contentArtifactId + contentRepresentationRevisionId refs; resolve copy via artifact_representation_get BEFORE the HITL renderer. If approved AND operator edited content, mint a new artifact revision via artifact_authoring_emit (extension @cinatra-ai/blog-post-artifact, declaredMime text/markdown), then call blog_post_publish_linkedin_update with the new refs (NOT raw content) before blog_post_publish_linkedin_publish. Return a single JSON object with {projectId, postId, linkedinDraftId, linkedinPostUrl, approved, summary} — nothing else.",
+        "user": "{# pyagentspec-input-hint: {{ projectId }} {{ postId }} {{ linkedinAccountId }} {{ linkedinAccountName }} {{ destinationType }} {{ destinationId }} {{ destinationName }} {{ blogPostUrl }} #}Publish a blog post to LinkedIn.\n\nInputs:\n- projectId: {{ projectId }}\n- postId: {{ postId }}\n- linkedinAccountId: {{ linkedinAccountId }}\n- linkedinAccountName: {{ linkedinAccountName }}\n- destinationType: {{ destinationType }}\n- destinationId: {{ destinationId }}\n- destinationName: {{ destinationName }}\n- blogPostUrl: {{ blogPostUrl }}",
+        "cinatra_llm": {
+          "preferredProvider": "openai",
+          "preferredModel": "gpt-5.5"
+        }
+      },
+      "inputs": [
+        {
+          "title": "projectId",
+          "type": "string"
+        },
+        {
+          "title": "postId",
+          "type": "string"
+        },
+        {
+          "title": "linkedinAccountId",
+          "type": "string"
+        },
+        {
+          "title": "linkedinAccountName",
+          "type": "string"
+        },
+        {
+          "title": "destinationType",
+          "type": "string"
+        },
+        {
+          "title": "destinationId",
+          "type": "string"
+        },
+        {
+          "title": "destinationName",
+          "type": "string"
+        },
+        {
+          "title": "blogPostUrl",
+          "type": "string"
+        }
+      ],
+      "outputs": [
+        {
+          "title": "projectId",
+          "type": "string"
+        },
+        {
+          "title": "postId",
+          "type": "string"
+        },
+        {
+          "title": "linkedinDraftId",
+          "type": "string"
+        },
+        {
+          "title": "linkedinPostUrl",
+          "type": "string"
+        },
+        {
+          "title": "approved",
+          "type": "boolean"
+        },
+        {
+          "title": "summary",
+          "type": "string"
+        }
+      ],
+      "metadata": {
+        "cinatra": {
+          "riskClass": "write_safe",
+          "requiresApproval": false,
+          "packageName": "@cinatra-ai/blog-linkedin-publish-agent",
+          "description": "Single ApiNode -> /api/llm-bridge. metadata.cinatra.toolboxes is INTENTIONALLY OMITTED so the LLM reaches blog_project_get, blog_post_publish_linkedin_{start,update,publish,cancel} via the injected Cinatra self-MCP. The HITL gate (draft-review) is declared at root metadata.cinatra.hitlScreens and emitted by the LLM via the standard A2UI INTERRUPT mechanism in the bridge."
+        }
+      }
+    },
+    "end": {
+      "component_type": "EndNode",
+      "id": "end",
+      "name": "End",
+      "outputs": [
+        {
+          "title": "projectId",
+          "type": "string",
+          "default": ""
+        },
+        {
+          "title": "postId",
+          "type": "string",
+          "default": ""
+        },
+        {
+          "title": "linkedinDraftId",
+          "type": "string",
+          "default": ""
+        },
+        {
+          "title": "linkedinPostUrl",
+          "type": "string",
+          "default": ""
+        },
+        {
+          "title": "approved",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "title": "summary",
+          "type": "string",
+          "default": ""
+        }
+      ]
+    }
+  }
+}
