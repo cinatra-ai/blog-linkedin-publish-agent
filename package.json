@@ -1,6 +1,6 @@
 {
   "name": "@cinatra-ai/blog-linkedin-publish-agent",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "license": "Apache-2.0",
   "description": "Publishes a Cinatra blog post to LinkedIn: starts draft generation, polls until ready, pauses for HITL operator review/edit, persists edits, then publishes. Returns linkedinPostUrl on success.",
   "type": "module",
