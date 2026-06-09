@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output (tsc emits to dist/ per tsconfig.json)
+dist/
+
+# Lockfile — extracted extension repos ship none; CI installs with --no-frozen-lockfile
+pnpm-lock.yaml
+
+# Test coverage
+coverage/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
