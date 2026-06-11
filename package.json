@@ -4,6 +4,10 @@
   "license": "Apache-2.0",
   "description": "Publishes a Cinatra blog post to LinkedIn: starts draft generation, polls until ready, pauses for HITL operator review/edit, persists edits, then publishes. Returns linkedinPostUrl on success.",
   "type": "module",
+  "files": [
+    "cinatra",
+    "skills"
+  ],
   "cinatra": {
     "apiVersion": "cinatra.ai/v1",
     "kind": "agent",
