@@ -11,6 +11,14 @@
   "cinatra": {
     "apiVersion": "cinatra.ai/v1",
     "kind": "agent",
-    "dependencies": []
+    "dependencies": [],
+    "fieldRenderers": [
+      {
+        "id": "@cinatra-ai/blog-linkedin-publish-agent:draft-review",
+        "kind": "linkedin-draft-review",
+        "priority": 90,
+        "midRunHitl": true
+      }
+    ]
   }
 }
