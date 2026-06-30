@@ -11,7 +11,48 @@
   "cinatra": {
     "apiVersion": "cinatra.ai/v1",
     "kind": "agent",
-    "dependencies": [],
+    "dependencies": [
+      {
+        "packageName": "@cinatra-ai/linkedin-connector",
+        "edgeType": "runtime",
+        "versionConstraint": {
+          "kind": "exact",
+          "version": "0.1.2"
+        },
+        "requirement": "required",
+        "kind": "connector"
+      }
+    ],
+    "consumes": [
+      {
+        "primitive": "blog_post_publish_linkedin_start",
+        "requirement": "required"
+      },
+      {
+        "primitive": "blog_post_publish_linkedin_update",
+        "requirement": "required"
+      },
+      {
+        "primitive": "blog_post_publish_linkedin_publish",
+        "requirement": "required"
+      },
+      {
+        "primitive": "blog_post_publish_linkedin_cancel",
+        "requirement": "required"
+      },
+      {
+        "primitive": "artifact_authoring_emit",
+        "requirement": "required"
+      },
+      {
+        "primitive": "artifact_representation_get",
+        "requirement": "required"
+      },
+      {
+        "primitive": "blog_project_get",
+        "requirement": "required"
+      }
+    ],
     "fieldRenderers": [
       {
         "id": "@cinatra-ai/blog-linkedin-publish-agent:draft-review",
