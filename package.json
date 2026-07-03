@@ -16,8 +16,8 @@
         "packageName": "@cinatra-ai/linkedin-connector",
         "edgeType": "runtime",
         "versionConstraint": {
-          "kind": "exact",
-          "version": "0.1.2"
+          "kind": "semver-range",
+          "range": "^0.1.2"
         },
         "requirement": "required",
         "kind": "connector"
