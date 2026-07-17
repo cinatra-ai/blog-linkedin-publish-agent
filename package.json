@@ -1,13 +1,33 @@
 {
   "name": "@cinatra-ai/blog-linkedin-publish-agent",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "Apache-2.0",
   "description": "Publishes a Cinatra blog post to LinkedIn: starts draft generation, polls until ready, pauses for HITL operator review/edit, persists edits, then publishes. Returns linkedinPostUrl on success.",
   "type": "module",
   "files": [
     "cinatra",
-    "skills"
+    "skills",
+    "src"
   ],
+  "peerDependencies": {
+    "@cinatra-ai/sdk-extensions": "*",
+    "@cinatra-ai/sdk-ui": "*",
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@cinatra-ai/sdk-extensions": {
+      "optional": true
+    },
+    "@cinatra-ai/sdk-ui": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "react": "^19.0.0"
+  },
   "cinatra": {
     "apiVersion": "cinatra.ai/v1",
     "kind": "agent",
@@ -59,7 +79,11 @@
         "id": "@cinatra-ai/blog-linkedin-publish-agent:draft-review",
         "kind": "linkedin-draft-review",
         "priority": 90,
-        "midRunHitl": true
+        "midRunHitl": true,
+        "component": {
+          "entry": "./src/renderers/draft-review.tsx",
+          "propsApiVersion": 1
+        }
       }
     ],
     "produces": [
