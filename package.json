@@ -33,6 +33,16 @@
     "displayName": "Blog LinkedIn Publish Agent",
     "dependencies": [
       {
+        "packageName": "@cinatra-ai/blog-post-artifact",
+        "edgeType": "runtime",
+        "versionConstraint": {
+          "kind": "semver-range",
+          "range": "^0.1.0"
+        },
+        "requirement": "required",
+        "kind": "artifact"
+      },
+      {
         "packageName": "@cinatra-ai/linkedin-connector",
         "edgeType": "runtime",
         "versionConstraint": {
