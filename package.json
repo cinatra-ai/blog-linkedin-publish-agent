@@ -1,6 +1,6 @@
 {
   "name": "@cinatra-ai/blog-linkedin-publish-agent",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "license": "Apache-2.0",
   "description": "Publishes a Cinatra blog post to LinkedIn: starts draft generation, polls until ready, pauses for HITL operator review/edit, persists edits, then publishes. Returns linkedinPostUrl on success.",
   "type": "module",
@@ -33,7 +33,7 @@
     "displayName": "Blog LinkedIn Publish Agent",
     "dependencies": [
       {
-        "packageName": "@cinatra-ai/blog-post-artifact",
+        "packageName": "@cinatra-ai/linkedin-artifacts",
         "edgeType": "runtime",
         "versionConstraint": {
           "kind": "semver-range",
@@ -97,7 +97,8 @@
     ],
     "produces": [
       {
-        "extension": "@cinatra-ai/blog-post-artifact"
+        "extension": "@cinatra-ai/linkedin-artifacts",
+        "objectTypeId": "@cinatra-ai/linkedin:post-draft"
       }
     ],
     "packageType": "agent",
@@ -109,5 +110,8 @@
     "hasApprovalGates": false,
     "toolAccess": [],
     "ownerOrgId": null
+  },
+  "scripts": {
+    "test": "sh -c \"node --test\""
   }
 }
