@@ -110,8 +110,5 @@
     "hasApprovalGates": false,
     "toolAccess": [],
     "ownerOrgId": null
-  },
-  "scripts": {
-    "test": "sh -c \"node --test\""
   }
 }
