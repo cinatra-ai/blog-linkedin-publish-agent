@@ -20,7 +20,7 @@ import {
   passthroughNodes,
   source,
   titles,
-} from "./oas-contract.mjs";
+} from "./oas-contract.test.mjs";
 
 const ADDRESS_KEYS = [
   "linkedinPublishedUrl",
@@ -103,13 +103,17 @@ test("the copy the orchestration posts is that read, not text of its own", () =>
 // 2. "both return receipts, not artifacts" + the address written back
 // ---------------------------------------------------------------------------
 
-test("the agent authors nothing", () => {
-  assert.ok(
-    manifest.cinatra.produces === undefined,
-    "a publisher declares no production — it returns a receipt, not an artifact",
-  );
+test("the agent emits no new artifact — it re-targets the one it was handed", () => {
   assert.ok(!consumedPrimitives().includes("artifact_authoring_emit"));
   assert.ok(!oasText().includes("artifact_authoring_emit"));
+  // The declaration table gives this agent one produced type: the LinkedIn
+  // post-draft it re-targets mid-run. Producing it is a write onto the artifact
+  // it was given, never an authoring emit and never a second artifact.
+  assert.deepEqual(
+    manifest.cinatra.produces.map((e) => e.objectTypeId),
+    ["@cinatra-ai/linkedin:post-draft"],
+    "the publisher re-targets the post-draft it was handed, and nothing else",
+  );
 });
 
 test("the address is written back onto the SAME artifact, through the host's write-back primitive", () => {
