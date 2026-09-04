@@ -3,7 +3,7 @@
   "component_type": "Flow",
   "id": "blog-linkedin-publish-agent-flow",
   "name": "Blog LinkedIn Publish Agent",
-  "description": "Adapts a Cinatra blog post into a LinkedIn post, pauses at a HITL gate for operator review/edit, persists edits via blog_post_publish_linkedin_update (refs only \u2014 agent materializes via artifact_authoring_emit first), then publishes via blog_post_publish_linkedin_publish. linkedinDrafts[] entries carry contentArtifactId + contentRepresentationRevisionId refs (@cinatra-ai/linkedin-artifacts); agent resolves copy via artifact_representation_get for the HITL renderer. Returns the linkedinPostUrl.",
+  "description": "Publishes the LinkedIn post ARTIFACT revision a person continued with to a connected LinkedIn destination, and writes the address back onto that artifact. The flow takes an artifact reference (linkedinArtifactId + linkedinRepresentationRevisionId), never raw text and never a blog record: a deterministic step reads the artifact's record and the pinned revision's words through the host's dependency-scoped artifact reads (artifacts_get + artifact_content_read, admitted by this package's declared @cinatra-ai/linkedin-artifacts edge); the orchestration step confirms with the person BEFORE anything goes out, then posts through the LinkedIn connector (linkedin_post_publish); a second deterministic step merges the address onto the artifact's data through objects_update. The publish returns a receipt, never a new artifact — the LinkedIn writer authors the post, this agent does not.",
   "metadata": {
     "cinatra": {
       "type": "flow",
@@ -19,11 +19,11 @@
   },
   "inputs": [
     {
-      "title": "projectId",
+      "title": "linkedinArtifactId",
       "type": "string"
     },
     {
-      "title": "postId",
+      "title": "linkedinRepresentationRevisionId",
       "type": "string"
     },
     {
@@ -55,20 +55,22 @@
     },
     {
       "title": "blogPostUrl",
-      "type": "string"
+      "type": "string",
+      "default": ""
+    },
+    {
+      "title": "cinatra_run_id",
+      "type": "string",
+      "default": ""
     }
   ],
   "outputs": [
     {
-      "title": "projectId",
+      "title": "linkedinArtifactId",
       "type": "string"
     },
     {
-      "title": "postId",
-      "type": "string"
-    },
-    {
-      "title": "linkedinDraftId",
+      "title": "linkedinRepresentationRevisionId",
       "type": "string"
     },
     {
@@ -76,7 +78,15 @@
       "type": "string"
     },
     {
+      "title": "linkedinPostExternalId",
+      "type": "string"
+    },
+    {
       "title": "approved",
+      "type": "boolean"
+    },
+    {
+      "title": "addressWritten",
       "type": "boolean"
     },
     {
@@ -92,7 +102,16 @@
       "$component_ref": "start"
     },
     {
+      "$component_ref": "read_post_record"
+    },
+    {
+      "$component_ref": "read_post_text"
+    },
+    {
       "$component_ref": "publish"
+    },
+    {
+      "$component_ref": "write_address"
     },
     {
       "$component_ref": "end"
@@ -101,9 +120,29 @@
   "control_flow_connections": [
     {
       "component_type": "ControlFlowEdge",
-      "name": "start_to_publish",
+      "name": "start_to_read_post_record",
       "from_node": {
         "$component_ref": "start"
+      },
+      "to_node": {
+        "$component_ref": "read_post_record"
+      }
+    },
+    {
+      "component_type": "ControlFlowEdge",
+      "name": "read_post_record_to_read_post_text",
+      "from_node": {
+        "$component_ref": "read_post_record"
+      },
+      "to_node": {
+        "$component_ref": "read_post_text"
+      }
+    },
+    {
+      "component_type": "ControlFlowEdge",
+      "name": "read_post_text_to_publish",
+      "from_node": {
+        "$component_ref": "read_post_text"
       },
       "to_node": {
         "$component_ref": "publish"
@@ -111,9 +150,19 @@
     },
     {
       "component_type": "ControlFlowEdge",
-      "name": "publish_to_end",
+      "name": "publish_to_write_address",
       "from_node": {
         "$component_ref": "publish"
+      },
+      "to_node": {
+        "$component_ref": "write_address"
+      }
+    },
+    {
+      "component_type": "ControlFlowEdge",
+      "name": "write_address_to_end",
+      "from_node": {
+        "$component_ref": "write_address"
       },
       "to_node": {
         "$component_ref": "end"
@@ -123,27 +172,87 @@
   "data_flow_connections": [
     {
       "component_type": "DataFlowEdge",
-      "name": "start_projectId_to_publish_projectId",
+      "name": "start_linkedinArtifactId_to_read_post_record_linkedinArtifactId",
       "source_node": {
         "$component_ref": "start"
       },
-      "source_output": "projectId",
+      "source_output": "linkedinArtifactId",
       "destination_node": {
-        "$component_ref": "publish"
+        "$component_ref": "read_post_record"
       },
-      "destination_input": "projectId"
+      "destination_input": "linkedinArtifactId"
     },
     {
       "component_type": "DataFlowEdge",
-      "name": "start_postId_to_publish_postId",
+      "name": "start_cinatra_run_id_to_read_post_record_cinatra_run_id",
       "source_node": {
         "$component_ref": "start"
       },
-      "source_output": "postId",
+      "source_output": "cinatra_run_id",
+      "destination_node": {
+        "$component_ref": "read_post_record"
+      },
+      "destination_input": "cinatra_run_id"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_linkedinArtifactId_to_read_post_text_linkedinArtifactId",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "linkedinArtifactId",
+      "destination_node": {
+        "$component_ref": "read_post_text"
+      },
+      "destination_input": "linkedinArtifactId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_linkedinRepresentationRevisionId_to_read_post_text_linkedinRepresentationRevisionId",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "linkedinRepresentationRevisionId",
+      "destination_node": {
+        "$component_ref": "read_post_text"
+      },
+      "destination_input": "linkedinRepresentationRevisionId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_cinatra_run_id_to_read_post_text_cinatra_run_id",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "cinatra_run_id",
+      "destination_node": {
+        "$component_ref": "read_post_text"
+      },
+      "destination_input": "cinatra_run_id"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_linkedinArtifactId_to_publish_linkedinArtifactId",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "linkedinArtifactId",
       "destination_node": {
         "$component_ref": "publish"
       },
-      "destination_input": "postId"
+      "destination_input": "linkedinArtifactId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_linkedinRepresentationRevisionId_to_publish_linkedinRepresentationRevisionId",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "linkedinRepresentationRevisionId",
+      "destination_node": {
+        "$component_ref": "publish"
+      },
+      "destination_input": "linkedinRepresentationRevisionId"
     },
     {
       "component_type": "DataFlowEdge",
@@ -219,39 +328,99 @@
     },
     {
       "component_type": "DataFlowEdge",
-      "name": "publish_projectId_to_end_projectId",
+      "name": "read_post_record_artifact_to_publish_postArtifact",
       "source_node": {
+        "$component_ref": "read_post_record"
+      },
+      "source_output": "artifact",
+      "destination_node": {
         "$component_ref": "publish"
       },
-      "source_output": "projectId",
-      "destination_node": {
-        "$component_ref": "end"
-      },
-      "destination_input": "projectId"
+      "destination_input": "postArtifact"
     },
     {
       "component_type": "DataFlowEdge",
-      "name": "publish_postId_to_end_postId",
+      "name": "read_post_text_text_to_publish_postText",
       "source_node": {
+        "$component_ref": "read_post_text"
+      },
+      "source_output": "text",
+      "destination_node": {
         "$component_ref": "publish"
       },
-      "source_output": "postId",
-      "destination_node": {
-        "$component_ref": "end"
-      },
-      "destination_input": "postId"
+      "destination_input": "postText"
     },
     {
       "component_type": "DataFlowEdge",
-      "name": "publish_linkedinDraftId_to_end_linkedinDraftId",
+      "name": "read_post_text_truncated_to_publish_truncated",
+      "source_node": {
+        "$component_ref": "read_post_text"
+      },
+      "source_output": "truncated",
+      "destination_node": {
+        "$component_ref": "publish"
+      },
+      "destination_input": "truncated"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_linkedinArtifactId_to_write_address_linkedinArtifactId",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "linkedinArtifactId",
+      "destination_node": {
+        "$component_ref": "write_address"
+      },
+      "destination_input": "linkedinArtifactId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_cinatra_run_id_to_write_address_cinatra_run_id",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "cinatra_run_id",
+      "destination_node": {
+        "$component_ref": "write_address"
+      },
+      "destination_input": "cinatra_run_id"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "publish_addressPatch_to_write_address_addressPatch",
       "source_node": {
         "$component_ref": "publish"
       },
-      "source_output": "linkedinDraftId",
+      "source_output": "addressPatch",
+      "destination_node": {
+        "$component_ref": "write_address"
+      },
+      "destination_input": "addressPatch"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "publish_linkedinArtifactId_to_end_linkedinArtifactId",
+      "source_node": {
+        "$component_ref": "publish"
+      },
+      "source_output": "linkedinArtifactId",
       "destination_node": {
         "$component_ref": "end"
       },
-      "destination_input": "linkedinDraftId"
+      "destination_input": "linkedinArtifactId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "publish_linkedinRepresentationRevisionId_to_end_linkedinRepresentationRevisionId",
+      "source_node": {
+        "$component_ref": "publish"
+      },
+      "source_output": "linkedinRepresentationRevisionId",
+      "destination_node": {
+        "$component_ref": "end"
+      },
+      "destination_input": "linkedinRepresentationRevisionId"
     },
     {
       "component_type": "DataFlowEdge",
@@ -264,6 +433,18 @@
         "$component_ref": "end"
       },
       "destination_input": "linkedinPostUrl"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "publish_linkedinPostExternalId_to_end_linkedinPostExternalId",
+      "source_node": {
+        "$component_ref": "publish"
+      },
+      "source_output": "linkedinPostExternalId",
+      "destination_node": {
+        "$component_ref": "end"
+      },
+      "destination_input": "linkedinPostExternalId"
     },
     {
       "component_type": "DataFlowEdge",
@@ -288,6 +469,18 @@
         "$component_ref": "end"
       },
       "destination_input": "summary"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "publish_addressWritten_to_end_addressWritten",
+      "source_node": {
+        "$component_ref": "publish"
+      },
+      "source_output": "addressWritten",
+      "destination_node": {
+        "$component_ref": "end"
+      },
+      "destination_input": "addressWritten"
     }
   ],
   "$referenced_components": {
@@ -298,26 +491,28 @@
       "metadata": {
         "cinatra": {
           "required": [
-            "projectId",
-            "postId",
+            "linkedinArtifactId",
+            "linkedinRepresentationRevisionId",
             "linkedinAccountId",
             "destinationType",
             "destinationId",
-            "destinationName",
-            "blogPostUrl"
+            "destinationName"
           ],
           "hidden": [
-            "linkedinAccountName"
-          ]
+            "linkedinAccountName",
+            "blogPostUrl",
+            "cinatra_run_id"
+          ],
+          "inputContract": "An ARTIFACT REFERENCE, never raw text and never a blog record: the LinkedIn post artifact and the exact representation revision the person continued with. blogPostUrl is HIDDEN on purpose — it is bound at the publishing step from the WordPress publisher's own published address, never asked of the person at the start."
         }
       },
       "inputs": [
         {
-          "title": "projectId",
+          "title": "linkedinArtifactId",
           "type": "string"
         },
         {
-          "title": "postId",
+          "title": "linkedinRepresentationRevisionId",
           "type": "string"
         },
         {
@@ -349,9 +544,110 @@
         },
         {
           "title": "blogPostUrl",
-          "type": "string"
+          "type": "string",
+          "default": ""
+        },
+        {
+          "title": "cinatra_run_id",
+          "type": "string",
+          "default": ""
         }
       ]
+    },
+    "read_post_record": {
+      "component_type": "ApiNode",
+      "id": "read_post_record",
+      "name": "Read the LinkedIn post artifact's record",
+      "url": "{{CINATRA_BASE_URL}}/api/agents/passthrough",
+      "http_method": "POST",
+      "data": {
+        "tool": "artifacts_get",
+        "input": {
+          "artifactId": "{{ linkedinArtifactId }}"
+        },
+        "agent_run_id": "{{ cinatra_run_id }}"
+      },
+      "inputs": [
+        {
+          "title": "linkedinArtifactId",
+          "type": "string"
+        },
+        {
+          "title": "cinatra_run_id",
+          "type": "string",
+          "default": ""
+        }
+      ],
+      "outputs": [
+        {
+          "title": "artifact",
+          "type": "object"
+        }
+      ],
+      "metadata": {
+        "cinatra": {
+          "riskClass": "read_only",
+          "requiresApproval": false,
+          "packageName": "@cinatra-ai/blog-linkedin-publish-agent",
+          "description": "Deterministic dependency-scoped artifact read: the LinkedIn post artifact's own record (title, mime, latest revision). Admitted by this package's declared @cinatra-ai/linkedin-artifacts edge, bound to the run's organisation and audited host-side."
+        }
+      }
+    },
+    "read_post_text": {
+      "component_type": "ApiNode",
+      "id": "read_post_text",
+      "name": "Read the revision the person continued with",
+      "url": "{{CINATRA_BASE_URL}}/api/agents/passthrough",
+      "http_method": "POST",
+      "data": {
+        "tool": "artifact_content_read",
+        "input": {
+          "artifactId": "{{ linkedinArtifactId }}",
+          "representationRevisionId": "{{ linkedinRepresentationRevisionId }}"
+        },
+        "agent_run_id": "{{ cinatra_run_id }}"
+      },
+      "inputs": [
+        {
+          "title": "linkedinArtifactId",
+          "type": "string"
+        },
+        {
+          "title": "linkedinRepresentationRevisionId",
+          "type": "string"
+        },
+        {
+          "title": "cinatra_run_id",
+          "type": "string",
+          "default": ""
+        }
+      ],
+      "outputs": [
+        {
+          "title": "text",
+          "type": "string"
+        },
+        {
+          "title": "representationRevisionId",
+          "type": "string"
+        },
+        {
+          "title": "mime",
+          "type": "string"
+        },
+        {
+          "title": "truncated",
+          "type": "boolean"
+        }
+      ],
+      "metadata": {
+        "cinatra": {
+          "riskClass": "read_only",
+          "requiresApproval": false,
+          "packageName": "@cinatra-ai/blog-linkedin-publish-agent",
+          "description": "Deterministic dependency-scoped content read of the PINNED representation revision — the copy the person continued with, and the only copy this agent posts. The revision id is an input, never the latest revision, so an edit made after the person continued is not what goes out."
+        }
+      }
     },
     "publish": {
       "component_type": "ApiNode",
@@ -361,8 +657,8 @@
       "http_method": "POST",
       "data": {
         "agent_id": "blog-linkedin-publish-agent",
-        "system": "You are a blog-LinkedIn-publish orchestrator. Follow the instructions below step-by-step. Pause at HITL Gate `:draft-review` so the operator can approve / edit / reject the generated post. Each linkedinDrafts[] entry carries contentArtifactId + contentRepresentationRevisionId refs; resolve copy via artifact_representation_get BEFORE the HITL renderer. If approved AND operator edited content, mint a new artifact revision via artifact_authoring_emit({ extension: \"@cinatra-ai/linkedin-artifacts\", content: <edited text>, declaredMime: \"text/markdown\", title: <deterministic title, never invented \u2014 see SKILL.md> }), then call blog_post_publish_linkedin_update with the new refs (NOT raw content) before blog_post_publish_linkedin_publish. Materializing this revision is production, not publishing \u2014 the external LinkedIn send stays gated on the separate blog_post_publish_linkedin_publish call after operator approval. If the emit call fails, do NOT call _update or _publish; return the error envelope with a summary naming the failure so no edit is silently lost. Return a single JSON object with {projectId, postId, linkedinDraftId, linkedinPostUrl, approved, summary} \u2014 nothing else.\n\n# Blog LinkedIn Publish Agent\n\nYou orchestrate the blog \u2192 LinkedIn publish flow with one HITL gate. Take the 8 inputs, run the 6 steps below, return a single JSON object \u2014 nothing else.\n\n**Publish-agent read contract.** The host project record carries `contentArtifactId` + `contentRepresentationRevisionId` refs (the LinkedIn copy lives in `@cinatra-ai/linkedin-artifacts`, declared in this agent's `cinatra.produces`). You resolve the copy via `artifact_representation_get` for the HITL renderer; on operator edits you mint a new artifact revision via `artifact_authoring_emit` and pass the resulting refs to `blog_post_publish_linkedin_update`. Inline `content: string` inputs are not part of this contract.\n\n**Production is not publishing.** Minting the artifact revision (this agent's *production*) and calling `blog_post_publish_linkedin_publish` (the external, HITL-gated *publish* side effect) are separate steps, in that order. `blog_post_publish_linkedin_update` requires the new refs before `_publish` is ever reachable, so a failed mint MUST abort before either `_update` or `_publish` \u2014 never silently drop the operator's edit and never invent placeholder refs.\n\n## Inputs\n\n- `projectId: string` \u2014 REQUIRED. The Cinatra blog project id.\n- `postId: string` \u2014 REQUIRED. The blog post id within the project.\n- `linkedinAccountId: string` \u2014 REQUIRED. The connected LinkedIn account id.\n- `linkedinAccountName: string` \u2014 optional friendly name to show in HITL.\n- `destinationType: \"member\" | \"organization\"` \u2014 REQUIRED.\n- `destinationId: string` \u2014 REQUIRED. The LinkedIn member id OR organization id.\n- `destinationName: string` \u2014 REQUIRED. The destination display name (member name OR organization name).\n- `blogPostUrl: string` \u2014 REQUIRED. The canonical public URL of the blog post (the LinkedIn draft links back to it).\n\n## Tool discipline\n\nYou may call exactly these 7 MCP primitives:\n\n- `blog_project_get({ projectId })` \u2014 poll the project to read `linkedinDraftGeneration.status / operation` and discover the `linkedinDraftId` in `posts[].linkedinDrafts[]`. Each draft entry carries `contentArtifactId + contentRepresentationRevisionId` refs instead of inline `content`.\n- `artifact_representation_get({ artifactId, representationRevisionId })` \u2014 resolve the LinkedIn copy bytes from the artifact refs. Use this BEFORE the HITL renderer so the operator sees the proposed copy.\n- `artifact_authoring_emit({ extension: \"@cinatra-ai/linkedin-artifacts\", content: <edited text>, declaredMime: \"text/markdown\", title: <deterministic title \u2014 see Step 6> })` \u2014 mint a new artifact revision when the operator edits the copy at HITL. All four fields are REQUIRED by the schema (`extension`, `content`, `declaredMime`, `title` \u2014 NOT `extensionPackageName`, and `title` is never omitted). Returns `{ artifactId, representationRevisionId }`. Reuse `@cinatra-ai/linkedin-artifacts`; do NOT introduce a separate social-content extension.\n- `blog_post_publish_linkedin_start({ ... })` \u2014 kick off draft generation (background job).\n- `blog_post_publish_linkedin_update({ projectId, postId, linkedinDraftId, contentArtifactId, contentRepresentationRevisionId })` \u2014 persist operator edits made at the HITL gate. Refs only; inline `content: string` is not accepted.\n- `blog_post_publish_linkedin_publish({ projectId, postId, linkedinDraftId, linkedinAccountId })` \u2014 publish the (possibly-edited) draft to LinkedIn.\n- `blog_post_publish_linkedin_cancel({ projectId })` \u2014 cancel the in-progress draft generation. Use ONLY when the operator rejects mid-flight before publish.\n\nDo not call any other MCP primitive. Do not call `web_search`, `objects_*`, or any other tool.\n\n## Hard contract facts\n\n- `BackgroundProcessRunStatus = \"idle\" | \"running\" | \"succeeded\" | \"failed\" | \"stopped\"`. Watch for `\"succeeded\"`, NOT `\"completed\"`.\n- `BlogPostLinkedInDraftState` has an `operation?: \"draft\" | \"publish\"` field. The same state is reused across draft generation AND publish operations \u2014 the `operation` field tells you which.\n- LinkedIn drafts live at `post.linkedinDrafts[]` (NOT inside `linkedinDraftGeneration`). Each entry has `{ id, contentArtifactId, contentRepresentationRevisionId, linkedinAccountId, destinationId, destinationName, blogPostUrl, status: \"draft\" | \"published\", ... }`. The inline `content: string` field is not present; resolve copy via `artifact_representation_get`.\n- After publish, `linkedinDraftGeneration.linkedinPostUrl` holds the resulting LinkedIn post URL.\n\n## Step-by-step recipe\n\n### Step 1 \u2014 Kick off draft generation\n\n```\nblog_post_publish_linkedin_start({\n  projectId: <projectId>,\n  postId: <postId>,\n  linkedinAccountId: <linkedinAccountId>,\n  linkedinAccountName: <linkedinAccountName>,\n  destinationType: <destinationType>,\n  destinationId: <destinationId>,\n  destinationName: <destinationName>,\n  blogPostUrl: <blogPostUrl>,\n})\n```\n\nIf the call throws, return:\n```json\n{ \"projectId\": \"...\", \"postId\": \"...\", \"linkedinDraftId\": \"\", \"linkedinPostUrl\": \"\", \"approved\": false, \"summary\": \"blog_post_publish_linkedin_start failed: <error>\" }\n```\n\n### Step 2 \u2014 Poll until the draft is ready\n\nCadence: every 5 seconds. Max 60 cycles (5 minute cap).\n\n```\nblog_project_get({ projectId: <projectId> })\n```\n\nRead `result.linkedinDraftGeneration.status` and `result.linkedinDraftGeneration.operation`.\n\n- If `status === \"succeeded\"` AND (`operation === \"draft\"` OR `operation === undefined`): break out \u2014 draft is ready.\n- If `status === \"failed\"`: return error envelope `{ approved: false, summary: \"LinkedIn draft generation failed: <message>\" }`.\n- If `status === \"stopped\"`: return `{ approved: false, summary: \"LinkedIn draft generation was stopped.\" }`.\n- If `status === \"running\"` or `\"idle\"`: continue polling.\n\nIf 60 cycles elapse without a terminal status, return `{ approved: false, summary: \"LinkedIn draft generation timed out after 5 minutes.\" }`.\n\n### Step 3 \u2014 Discover the draft entry + resolve copy bytes\n\nFrom the polled `blog_project_get` result, find the matching post:\n\n```\nconst post = result.posts.find(p => p.id === <postId>);\n```\n\nThen find the newest matching draft entry in `post.linkedinDrafts[]` where ALL of:\n- `linkedinAccountId === <linkedinAccountId>`\n- `destinationId === <destinationId>`\n- `blogPostUrl === <blogPostUrl>`\n- `status === \"draft\"`\n\nIf multiple matches, pick the one with the latest `updatedAt`. Capture `draftId` from `entry.id` and the artifact refs from `entry.contentArtifactId + entry.contentRepresentationRevisionId`.\n\nThen resolve the copy bytes:\n\n```\nartifact_representation_get({\n  artifactId: <entry.contentArtifactId>,\n  representationRevisionId: <entry.contentRepresentationRevisionId>,\n})\n```\n\nThe response carries the bytes (decode base64 to UTF-8 text if needed); call the resolved string `draftContent` for the HITL renderer.\n\nIf no entry matches, return `{ approved: false, summary: \"No LinkedIn draft matched the input destination \u2014 possible state race.\" }`. If the artifact refs are missing or `artifact_representation_get` returns no content, return `{ approved: false, summary: \"LinkedIn draft has no resolvable copy artifact.\" }`.\n\n### Step 4 \u2014 HITL Gate `:draft-review`\n\nEmit an INTERRUPT payload with `x-renderer: \"@cinatra-ai/blog-linkedin-publish-agent:draft-review\"` and value:\n\n```json\n{\n  \"linkedinDraftId\": \"<draftId>\",\n  \"content\": \"<draftContent>\",\n  \"linkedinAccountName\": \"<linkedinAccountName>\",\n  \"destinationName\": \"<destinationName>\",\n  \"destinationType\": \"<destinationType>\",\n  \"blogPostUrl\": \"<blogPostUrl>\"\n}\n```\n\nWait for the operator's approval payload. Possible shapes:\n\n- Approved (no edits): `{ approved: true, linkedinDraftId: \"<draftId>\", content: \"<same content as proposed>\" }`\n- Approved with edits: `{ approved: true, linkedinDraftId: \"<draftId>\", content: \"<edited content>\" }`\n- Rejected: `{ approved: false, reason?: \"...\" }`\n\n### Step 5 \u2014 On rejection: cancel + return\n\nIf `approval.approved !== true`:\n\n```\nblog_post_publish_linkedin_cancel({ projectId: <projectId> })\n```\n\n(Best-effort \u2014 if the cancel call throws because no job is running, log + ignore.)\n\nThe cancel primitive is **terminal-state safe**: if the job has already reached\n`succeeded`, `failed`, or `stopped`, the call returns the project unchanged\nwithout clobbering the outcome (so a successful publish's `linkedinPostUrl` is\npreserved across a late reject). You may still call it unconditionally at the\nreject path \u2014 the guard is in the store.\n\nReturn:\n```json\n{ \"projectId\": \"...\", \"postId\": \"...\", \"linkedinDraftId\": \"<draftId>\", \"linkedinPostUrl\": \"\", \"approved\": false, \"summary\": \"Operator rejected at draft-review. Reason: <reason or 'no reason'>\" }\n```\n\n### Step 6 \u2014 On approval: materialize edits + persist + publish + poll\n\nIf the operator's `content` differs from the proposed `draftContent`, first mint a NEW artifact revision via `artifact_authoring_emit` (this is *production* \u2014 a real, host-tracked artifact write, distinct from the external *publish* side effect below), then pass refs to `_update`:\n\n```\nconst title = `LinkedIn draft \u2014 ${postId} (${destinationName})`; // deterministic, built from REQUIRED inputs \u2014 never LLM-invented\n\nconst minted = artifact_authoring_emit({\n  extension: \"@cinatra-ai/linkedin-artifacts\",\n  content: <approval.content>,\n  declaredMime: \"text/markdown\",\n  title: <title>,\n});\n\nblog_post_publish_linkedin_update({\n  projectId: <projectId>,\n  postId: <postId>,\n  linkedinDraftId: <draftId>,\n  contentArtifactId: minted.artifactId,\n  contentRepresentationRevisionId: minted.representationRevisionId,\n})\n```\n\nThe LinkedIn copy artifact extension is `@cinatra-ai/linkedin-artifacts`\n(the LinkedIn extension's own post-draft type). The blog post body keeps its\nown extension: a LinkedIn post is a LinkedIn post, never a second blog post.\n\nIf `artifact_authoring_emit` throws, do NOT call `_update` or `_publish`. Return immediately:\n```json\n{ \"projectId\": \"...\", \"postId\": \"...\", \"linkedinDraftId\": \"<draftId>\", \"linkedinPostUrl\": \"\", \"approved\": false, \"summary\": \"Failed to persist the operator's edit: <error>. Publish aborted before stale content was sent \u2014 retry once the artifact extension can accept the write.\" }\n```\n\nIf `approval.content === draftContent`, skip both calls (no edit; the existing refs stay valid). Either way, then publish:\n\n```\nblog_post_publish_linkedin_publish({\n  projectId: <projectId>,\n  postId: <postId>,\n  linkedinDraftId: <draftId>,\n  linkedinAccountId: <linkedinAccountId>,\n})\n```\n\nPoll `blog_project_get({ projectId })` every 5 seconds, max 60 cycles, until:\n- `linkedinDraftGeneration.status === \"succeeded\"` AND `linkedinDraftGeneration.operation === \"publish\"`.\n\nOn `failed` or `stopped`: return error envelope with what's known.\n\nCapture `linkedinDraftGeneration.linkedinPostUrl`. Return:\n\n```json\n{\n  \"projectId\": \"<projectId>\",\n  \"postId\": \"<postId>\",\n  \"linkedinDraftId\": \"<draftId>\",\n  \"linkedinPostUrl\": \"<linkedinPostUrl>\",\n  \"approved\": true,\n  \"summary\": \"Published to LinkedIn.\"\n}\n```\n\nThe publish operation reuses `linkedinDraftGeneration` \u2014 do NOT look for a separate \"linkedin-publish-generation\" field; it does not exist. Watch `operation === \"publish\"` on the same generation state.\n\n## Error envelope\n\nWhenever an error path is taken, the JSON shape is:\n\n```json\n{\n  \"projectId\": \"<projectId>\",\n  \"postId\": \"<postId>\",\n  \"linkedinDraftId\": \"<draftId or empty>\",\n  \"linkedinPostUrl\": \"\",\n  \"approved\": false,\n  \"summary\": \"<one-line operator-readable explanation>\"\n}\n```",
-        "user": "{# pyagentspec-input-hint: {{ projectId }} {{ postId }} {{ linkedinAccountId }} {{ linkedinAccountName }} {{ destinationType }} {{ destinationId }} {{ destinationName }} {{ blogPostUrl }} #}Publish a blog post to LinkedIn.\n\nInputs:\n- projectId: {{ projectId }}\n- postId: {{ postId }}\n- linkedinAccountId: {{ linkedinAccountId }}\n- linkedinAccountName: {{ linkedinAccountName }}\n- destinationType: {{ destinationType }}\n- destinationId: {{ destinationId }}\n- destinationName: {{ destinationName }}\n- blogPostUrl: {{ blogPostUrl }}",
+        "system": "You are a blog-LinkedIn-publish orchestrator. Follow the instructions below step-by-step. Pause at HITL Gate `:draft-review` so the person confirms BEFORE the post goes out. Return a single JSON object with {linkedinArtifactId, linkedinRepresentationRevisionId, linkedinPostUrl, linkedinPostExternalId, addressPatch, addressWritten, approved, summary} — nothing else.\n\n# Blog LinkedIn Publish Agent\n\nYou publish ONE LinkedIn post-draft artifact revision to a connected LinkedIn destination and hand the address back so the deterministic step behind you can write it onto the artifact.\n\n## What you are given\n\n- `linkedinArtifactId: string` — the LinkedIn post-draft artifact (`@cinatra-ai/linkedin:post-draft`), written by the LinkedIn writer, not by you.\n- `linkedinRepresentationRevisionId: string` — THE REVISION THE PERSON CONTINUED WITH. It is pinned; nothing later is published.\n- `postText: string` — the words of exactly that revision, already read for you by the deterministic step in front of you (the host's dependency-scoped artifact content read). This is the ONLY copy you post.\n- `postArtifact: object` — that artifact's own record (`title`, `mime`, timestamps). It is the artifact's CURRENT record, not the pinned revision, so nothing you post comes from it.\n- `truncated: boolean` — whether the pinned read came back cut short. See Step 0.\n- `linkedinAccountId`, `destinationType` (`member` or `organization`), `destinationId`, `destinationName`, `linkedinAccountName` — where it goes.\n- `blogPostUrl: string` — the blog post's address, filled in at the publishing step from the WordPress publisher's own output, never guessed at the start. It may be empty when the post has no address yet.\n\nYOU DO NOT WRITE. You do not draft, re-word, extend, shorten or re-generate the copy, and you do not author or emit any artifact: the writer made the post, the person continued with a revision of it, and that revision is what goes out. A person who wants different words changes them on the review, not here.\n\n## Tool discipline\n\nYou may call exactly this 1 primitive:\n\n- `linkedin_post_publish({ accountId, destinationType, destinationId, content })` — post to the connected destination. `content` is `postText`, with `blogPostUrl` appended on its own last line when `blogPostUrl` is non-empty AND `postText` does not already contain it.\n\nCall NOTHING else. You never read or write an artifact yourself — the steps around you do that through the host's own primitives — and you never reach a blog record.\n\n## Step-by-step recipe\n\n### Step 0 — the pinned words must be whole\n\nWhen `truncated` is true the read came back cut short, so what you hold is NOT the whole pinned revision. Post nothing, ask nothing, and return the envelope of Step 4 with `approved: false`, `linkedinPostUrl: \"\"`, `linkedinPostExternalId: \"\"`, `addressPatch: {}`, `addressWritten: false` and a `summary` naming the truncation. Never post a cut-short copy, and never call it the pinned revision.\n\n### Step 1 — the confirmation, BEFORE anything goes out\n\nEmit INTERRUPT with `x-renderer: \"@cinatra-ai/blog-linkedin-publish-agent:draft-review\"` and value:\n\n```json\n{\n  \"linkedinArtifactId\": \"<linkedinArtifactId>\",\n  \"linkedinRepresentationRevisionId\": \"<linkedinRepresentationRevisionId>\",\n  \"content\": \"<the content you assembled>\",\n  \"linkedinAccountName\": \"<linkedinAccountName>\",\n  \"destinationName\": \"<destinationName>\",\n  \"destinationType\": \"<destinationType>\",\n  \"blogPostUrl\": \"<blogPostUrl>\"\n}\n```\n\nWait for the person. Possible shapes:\n\n- Confirmed: `{ approved: true, linkedinArtifactId: \"<linkedinArtifactId>\" }`\n- Declined: `{ approved: false, reason?: \"...\" }`\n\nThe screen shows the copy; it does not edit it. Ignore any `content` that comes back on the answer — the pinned revision is what is published.\n\nOn DECLINED, post nothing and return the envelope of Step 4 with `approved: false`, `linkedinPostUrl: \"\"`, `linkedinPostExternalId: \"\"`, `addressPatch: {}` and a one-line `summary` naming the decline.\n\n### Step 2 — post it\n\n```\nlinkedin_post_publish({\n  accountId: <linkedinAccountId>,\n  destinationType: <destinationType>,\n  destinationId: <destinationId>,\n  content: <the content you assembled>,\n})\n```\n\nFrom the result read the post's address → `linkedinPostUrl`, and the platform's own id for it (its URN) → `linkedinPostExternalId`.\n\nIf the call throws, or returns no address, return the envelope with `approved: true`, `linkedinPostUrl: \"\"`, `addressPatch: {}` and a summary naming the failure — the person did confirm; the publish is what failed.\n\n### Step 3 — build the write-back patch\n\nThe deterministic step behind you merges `addressPatch` onto the LinkedIn artifact's own data through the host's write-back primitive. Build it with EXACTLY these three keys and no others:\n\n```json\n{\n  \"linkedinPublishedUrl\": \"<linkedinPostUrl>\",\n  \"linkedinPublishedExternalId\": \"<linkedinPostExternalId>\",\n  \"linkedinPublishedRevisionId\": \"<linkedinRepresentationRevisionId>\"\n}\n```\n\nWhen nothing was published — declined, a failed call, or no address in the result — `addressPatch` is `{}` exactly. An empty patch merges nothing, so no address, no half address and no empty string is ever written onto the artifact. Never guess an address. The patch's key space is CLOSED: those three keys and nothing else may ever appear in it. Never add a key of your own, and never a field of the artifact itself (`title`, `mime`, `content` or any other) — the step behind you merges the patch straight onto the artifact's own data, so a key you invent is written onto the artifact. Every value must be a non-empty string LinkedIn actually returned (the revision id being the one you were given). A key you cannot fill that way is not put in the patch, and a patch you cannot fill completely is `{}`. Set `addressWritten` to true only when you built the complete three-key patch, and false in every other case — that is what the run reports about the address.\n\n### Step 4 — return\n\n```json\n{\n  \"linkedinArtifactId\": \"<linkedinArtifactId>\",\n  \"linkedinRepresentationRevisionId\": \"<linkedinRepresentationRevisionId>\",\n  \"linkedinPostUrl\": \"<linkedinPostUrl or empty>\",\n  \"linkedinPostExternalId\": \"<linkedinPostExternalId or empty>\",\n  \"addressPatch\": { },\n  \"addressWritten\": false,\n  \"approved\": true,\n  \"summary\": \"<one-line explanation a person can read>\"\n}\n```\n",
+        "user": "{# pyagentspec-input-hint: {{ linkedinArtifactId }} {{ linkedinRepresentationRevisionId }} {{ linkedinAccountId }} {{ linkedinAccountName }} {{ destinationType }} {{ destinationId }} {{ destinationName }} {{ blogPostUrl }} {{ postText }} {{ postArtifact }} #}Publish the pinned revision of the LinkedIn post artifact to the connected destination.\n\nInputs:\n- linkedinArtifactId: {{ linkedinArtifactId }}\n- linkedinRepresentationRevisionId: {{ linkedinRepresentationRevisionId }}\n- linkedinAccountId: {{ linkedinAccountId }}\n- linkedinAccountName: {{ linkedinAccountName }}\n- destinationType: {{ destinationType }}\n- destinationId: {{ destinationId }}\n- destinationName: {{ destinationName }}\n- blogPostUrl: {{ blogPostUrl }}\n- postArtifact: {{ postArtifact }}\n- postText: {{ postText }}",
         "cinatra_llm": {
           "preferredProvider": "openai",
           "preferredModel": "gpt-5.5"
@@ -370,11 +666,11 @@
       },
       "inputs": [
         {
-          "title": "projectId",
+          "title": "linkedinArtifactId",
           "type": "string"
         },
         {
-          "title": "postId",
+          "title": "linkedinRepresentationRevisionId",
           "type": "string"
         },
         {
@@ -400,24 +696,44 @@
         {
           "title": "blogPostUrl",
           "type": "string"
+        },
+        {
+          "title": "postText",
+          "type": "string"
+        },
+        {
+          "title": "postArtifact",
+          "type": "object"
+        },
+        {
+          "title": "truncated",
+          "type": "boolean"
         }
       ],
       "outputs": [
         {
-          "title": "projectId",
+          "title": "linkedinArtifactId",
           "type": "string"
         },
         {
-          "title": "postId",
-          "type": "string"
-        },
-        {
-          "title": "linkedinDraftId",
+          "title": "linkedinRepresentationRevisionId",
           "type": "string"
         },
         {
           "title": "linkedinPostUrl",
           "type": "string"
+        },
+        {
+          "title": "linkedinPostExternalId",
+          "type": "string"
+        },
+        {
+          "title": "addressPatch",
+          "type": "object"
+        },
+        {
+          "title": "addressWritten",
+          "type": "boolean"
         },
         {
           "title": "approved",
@@ -430,10 +746,64 @@
       ],
       "metadata": {
         "cinatra": {
-          "riskClass": "write_safe",
+          "riskClass": "write",
           "requiresApproval": false,
           "packageName": "@cinatra-ai/blog-linkedin-publish-agent",
-          "description": "Single ApiNode -> /api/llm-bridge. metadata.cinatra.toolboxes is INTENTIONALLY OMITTED so the LLM reaches blog_project_get, blog_post_publish_linkedin_{start,update,publish,cancel} via the injected Cinatra self-MCP. The HITL gate (draft-review) is declared at root metadata.cinatra.hitlScreens and emitted by the LLM via the standard A2UI INTERRUPT mechanism in the bridge."
+          "description": "Single ApiNode -> /api/llm-bridge. metadata.cinatra.toolboxes is INTENTIONALLY OMITTED so the model reaches the LinkedIn connector's linkedin_post_publish through the injected Cinatra self-MCP. The HITL gate (draft-review) is declared at root metadata.cinatra.hitlScreens and emitted via the standard A2UI INTERRUPT mechanism; it SHOWS the pinned copy and asks for a confirmation — it no longer edits, because what is published is the revision the person continued with. The node emits addressPatch — the three literal address keys, or {} when nothing was published — which the write_address step merges onto the artifact."
+        }
+      }
+    },
+    "write_address": {
+      "component_type": "ApiNode",
+      "id": "write_address",
+      "name": "Write the address back onto the LinkedIn post artifact",
+      "url": "{{CINATRA_BASE_URL}}/api/agents/passthrough",
+      "http_method": "POST",
+      "data": {
+        "tool": "objects_update",
+        "input": {
+          "objectId": "{{ linkedinArtifactId }}",
+          "data": "{{ addressPatch }}"
+        },
+        "agent_run_id": "{{ cinatra_run_id }}"
+      },
+      "inputs": [
+        {
+          "title": "linkedinArtifactId",
+          "type": "string"
+        },
+        {
+          "title": "addressPatch",
+          "type": "object"
+        },
+        {
+          "title": "cinatra_run_id",
+          "type": "string",
+          "default": ""
+        }
+      ],
+      "outputs": [
+        {
+          "title": "ok",
+          "type": "boolean"
+        },
+        {
+          "title": "changeSetId",
+          "type": "string"
+        }
+      ],
+      "metadata": {
+        "cinatra": {
+          "riskClass": "write",
+          "requiresApproval": false,
+          "packageName": "@cinatra-ai/blog-linkedin-publish-agent",
+          "description": "THE WRITE-BACK, and the only road it takes: objects_update merges the patch into the SAME artifact row's data (objects.data) — never a side channel, never a new artifact, never a blog record. The merge is shallow at the top level, which is why the address keys are flat and destination-prefixed: a second destination's write cannot clobber this one. An empty patch (nothing published) merges nothing.",
+          "addressPatchKeys": [
+            "linkedinPublishedUrl",
+            "linkedinPublishedExternalId",
+            "linkedinPublishedRevisionId"
+          ],
+          "addressPatchRule": "The patch's key space is closed to those keys. objects_update merges every top-level key it is given straight onto the artifact's own data, so a key outside this list would land on the artifact; an incomplete patch is {} exactly, which merges nothing. A runtime allowlist needs a deterministic write-back seam on the host side; until there is one, this declaration plus the orchestration recipe is the contract, and the pack's own suite asserts both."
         }
       }
     },
@@ -443,17 +813,12 @@
       "name": "End",
       "outputs": [
         {
-          "title": "projectId",
+          "title": "linkedinArtifactId",
           "type": "string",
           "default": ""
         },
         {
-          "title": "postId",
-          "type": "string",
-          "default": ""
-        },
-        {
-          "title": "linkedinDraftId",
+          "title": "linkedinRepresentationRevisionId",
           "type": "string",
           "default": ""
         },
@@ -463,7 +828,17 @@
           "default": ""
         },
         {
+          "title": "linkedinPostExternalId",
+          "type": "string",
+          "default": ""
+        },
+        {
           "title": "approved",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "title": "addressWritten",
           "type": "boolean",
           "default": false
         },

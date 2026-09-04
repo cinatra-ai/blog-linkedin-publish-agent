@@ -1,20 +1,16 @@
 # Blog LinkedIn Publish Agent
 
-Adapt a published blog post into a LinkedIn post and ship it from your member profile or company page. The agent drafts the LinkedIn copy, pauses for you to review and tweak the wording, then posts it for you and hands back the live LinkedIn URL.
+Post a LinkedIn post that already exists in Cinatra — the exact version you continued with — and get its address back on it. You confirm before anything goes out, so declining posts nothing.
 
-**Purpose.** Automates the blog-to-LinkedIn publish workflow: draft generation, human-in-the-loop review, and final publish.
+To use this agent, connect a LinkedIn account to your Cinatra workspace via the marketplace, then trigger the agent with the LinkedIn post (`linkedinArtifactId`), the version of it you continued with (`linkedinRepresentationRevisionId`), the account (`linkedinAccountId`) and the destination (`destinationType` — `member` or `organization` — plus `destinationId` and `destinationName`). The blog post's address (`blogPostUrl`) is filled in at the publishing step from the WordPress publish, not asked of you at the start.
 
-**Prerequisites.** A LinkedIn account must be connected to your Cinatra workspace before triggering this agent. The connection supplies the `linkedinAccountId` input.
+The agent reads the pinned version's words through Cinatra's own artifact reads and shows them to you read-only: what goes out is the version you continued with, so the screen decides only whether it goes. Change the words on the post's review instead — this agent writes nothing and drafts nothing; the LinkedIn writer is what authors the post.
 
-**Inputs.** `projectId` and `postId` identify the Cinatra blog post. `linkedinAccountId` is the connected LinkedIn account. `destinationType` is `member` or `organization`; pair it with `destinationId` and `destinationName`. `blogPostUrl` is the canonical public URL the draft links back to.
+On confirmation the post is published through the LinkedIn connector, and the agent writes the address back onto the LinkedIn post itself, under `linkedinPublishedUrl`, beside the platform's own id for it (`linkedinPublishedExternalId`) and the version that was published (`linkedinPublishedRevisionId`). The agent returns those as `linkedinPostUrl`, `linkedinPostExternalId` and `approved`; a publish returns a receipt, never a new document.
 
-**Usage.** Trigger the agent from the Cinatra dashboard with the inputs above. The agent starts draft generation, polls until the draft is ready (up to five minutes), then opens a review screen. You can read, edit, or reject the proposed copy. On approval the agent persists any edits and publishes, then returns `linkedinPostUrl`.
+If the pinned version comes back cut short, the agent posts nothing rather than put out part of it.
 
-**Configuration.** No extra environment variables are required at runtime. The agent uses the Cinatra self-MCP bridge and the `@cinatra-ai/blog-post-artifact` extension to store and retrieve LinkedIn copy revisions.
-
-**Outputs.** On success: `linkedinPostUrl`, `linkedinDraftId`, `approved: true`, and a `summary`. On rejection: `approved: false` with a summary.
-
-**Troubleshooting.** If draft generation times out, retry after checking the blog project status in the dashboard. If the review screen shows no content, confirm the blog post record contains `contentArtifactId` and `contentRepresentationRevisionId` refs. A `destinationType` mismatch (passing a member id for an organization) causes a LinkedIn API error at publish time.
+If you decline, or the publish fails, the agent returns `approved: false` (or an empty `linkedinPostUrl`) with a one-line `summary`, and nothing is written onto the post — never a half address, never an empty one.
 
 ## Works with
 
@@ -22,7 +18,7 @@ Adapt a published blog post into a LinkedIn post and ship it from your member pr
 
 ## Capabilities
 
-- Adapt a Cinatra blog post into a native-feeling LinkedIn post
-- Review and edit the draft before anything is published
-- Publish to a LinkedIn member profile or company page on your behalf
-- Return the live LinkedIn post URL for sharing and tracking
+- Post the exact version of a LinkedIn post you continued with, straight from it
+- Ask you once, before anything goes out
+- Carry the blog post's address, filled in at the publishing step rather than guessed at the start
+- Write the post's address back onto it, where the rest of the product can read it
