@@ -1,9 +1,12 @@
 {
   "name": "@cinatra-ai/blog-linkedin-publish-agent",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "license": "Apache-2.0",
-  "description": "Publishes a Cinatra blog post to LinkedIn: starts draft generation, polls until ready, pauses for HITL operator review/edit, persists edits, then publishes. Returns linkedinPostUrl on success.",
+  "description": "Publishes the LinkedIn post ARTIFACT revision a person continued with to a connected LinkedIn destination and writes the address back onto that artifact. Takes an artifact reference (linkedinArtifactId + linkedinRepresentationRevisionId), confirms with the person before anything goes out, posts through the LinkedIn connector, and merges the address onto the artifact's data. Returns a receipt, never a new artifact — the LinkedIn writer authors the post, this agent does not.",
   "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
   "files": [
     "cinatra",
     "src"
@@ -55,31 +58,19 @@
     ],
     "consumes": [
       {
-        "primitive": "blog_post_publish_linkedin_start",
+        "primitive": "artifacts_get",
         "requirement": "required"
       },
       {
-        "primitive": "blog_post_publish_linkedin_update",
+        "primitive": "artifact_content_read",
         "requirement": "required"
       },
       {
-        "primitive": "blog_post_publish_linkedin_publish",
+        "primitive": "objects_update",
         "requirement": "required"
       },
       {
-        "primitive": "blog_post_publish_linkedin_cancel",
-        "requirement": "required"
-      },
-      {
-        "primitive": "artifact_authoring_emit",
-        "requirement": "required"
-      },
-      {
-        "primitive": "artifact_representation_get",
-        "requirement": "required"
-      },
-      {
-        "primitive": "blog_project_get",
+        "primitive": "linkedin_post_publish",
         "requirement": "required"
       }
     ],
@@ -93,12 +84,6 @@
           "entry": "./src/renderers/draft-review.tsx",
           "propsApiVersion": 1
         }
-      }
-    ],
-    "produces": [
-      {
-        "extension": "@cinatra-ai/linkedin-artifacts",
-        "objectTypeId": "@cinatra-ai/linkedin:post-draft"
       }
     ],
     "packageType": "agent",

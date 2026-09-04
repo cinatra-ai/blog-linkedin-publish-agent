@@ -8,10 +8,13 @@
 // binding id; a degraded/absent module falls back to the host's
 // SchemaFieldRenderer floor.
 //
-// Shows the generated LinkedIn post draft to the operator. The operator can
-// approve (with or without edits), reject, or cancel. Edits are persisted via
-// blog_post_publish_linkedin_update BEFORE the publish primitive runs (see
-// SKILL.md Step 6).
+// THE SCREEN SHOWS, IT DOES NOT EDIT (cinatra#3035, plan section 6.1 step 7: "a
+// confirmation before the LinkedIn post goes out, then its address"). What is
+// published is the revision of the LinkedIn post artifact the person continued
+// with, so the copy here is exactly those words, read-only: a last-second edit
+// in this box would publish bytes no revision holds. Words are changed on the
+// review, which appends a revision; this screen decides only whether the post
+// goes out.
 //
 // A source mirror the host builds into its own graph: props type comes from the
 // public `@cinatra-ai/sdk-ui/field-renderer-props` contract (an agent extension
@@ -19,7 +22,7 @@
 // code); the shadcn primitives are VENDORED (own-your-code copies under
 // ./components/ui), not imported from the host `@/` alias.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import type { FieldRendererProps } from "@cinatra-ai/sdk-ui/field-renderer-props";
 
@@ -32,10 +35,10 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { Label } from "../components/ui/label";
-import { Textarea } from "../components/ui/textarea";
 
 type DraftReviewValue = {
-  linkedinDraftId: string;
+  linkedinArtifactId: string;
+  linkedinRepresentationRevisionId: string;
   content: string;
   linkedinAccountName?: string;
   destinationName?: string;
@@ -43,26 +46,27 @@ type DraftReviewValue = {
   blogPostUrl?: string;
 };
 
+function str(v: Record<string, unknown>, key: string): string {
+  return typeof v[key] === "string" ? (v[key] as string) : "";
+}
+
 function toDraftReviewValue(value: unknown): DraftReviewValue {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const v = value as Record<string, unknown>;
     return {
-      linkedinDraftId:
-        typeof v.linkedinDraftId === "string" ? v.linkedinDraftId : "",
-      content: typeof v.content === "string" ? v.content : "",
-      linkedinAccountName:
-        typeof v.linkedinAccountName === "string"
-          ? v.linkedinAccountName
-          : undefined,
-      destinationName:
-        typeof v.destinationName === "string" ? v.destinationName : undefined,
-      destinationType:
-        typeof v.destinationType === "string" ? v.destinationType : undefined,
-      blogPostUrl:
-        typeof v.blogPostUrl === "string" ? v.blogPostUrl : undefined,
+      linkedinArtifactId: str(v, "linkedinArtifactId"),
+      linkedinRepresentationRevisionId: str(
+        v,
+        "linkedinRepresentationRevisionId",
+      ),
+      content: str(v, "content"),
+      linkedinAccountName: str(v, "linkedinAccountName") || undefined,
+      destinationName: str(v, "destinationName") || undefined,
+      destinationType: str(v, "destinationType") || undefined,
+      blogPostUrl: str(v, "blogPostUrl") || undefined,
     };
   }
-  return { linkedinDraftId: "", content: "" };
+  return { linkedinArtifactId: "", linkedinRepresentationRevisionId: "", content: "" };
 }
 
 export default function BlogLinkedinDraftReviewRenderer({
@@ -71,44 +75,34 @@ export default function BlogLinkedinDraftReviewRenderer({
   disabled,
 }: FieldRendererProps) {
   const v = useMemo(() => toDraftReviewValue(value), [value]);
-  const [content, setContent] = useState<string>(v.content);
 
   const onChangeRef = useRef(onChange);
   useEffect(() => {
     onChangeRef.current = onChange;
   });
 
-  // Gate Approve/Reject on a non-empty linkedinDraftId.
-  // The renderer mounts as soon as the interrupt fires; if the LLM/agent has
-  // not yet wired the draftId into the field-snapshot (mount race) we could
-  // emit `{ approved, linkedinDraftId: "" }` which silently no-ops the
-  // publish primitive. Better to keep the buttons disabled until the
-  // identifier arrives.
-  const hasDraftId = v.linkedinDraftId.trim() !== "";
-  const buttonsDisabled = disabled === true || !hasDraftId;
-  const approveDisabled = buttonsDisabled || content.trim() === "";
+  // Gate the decision on a complete artifact reference. The renderer mounts as
+  // soon as the interrupt fires; if the agent has not yet wired the reference
+  // into the field-snapshot (mount race) a decision would name no revision —
+  // and the revision is precisely what goes out.
+  const hasReference =
+    v.linkedinArtifactId.trim() !== "" &&
+    v.linkedinRepresentationRevisionId.trim() !== "";
+  const buttonsDisabled = disabled === true || !hasReference;
 
-  const handleApprove = () => {
-    if (content.trim() === "" || !hasDraftId) return;
+  const decide = (approved: boolean) => () => {
+    if (!hasReference) return;
     onChangeRef.current({
-      approved: true,
-      linkedinDraftId: v.linkedinDraftId,
-      content,
-    });
-  };
-
-  const handleReject = () => {
-    if (!hasDraftId) return;
-    onChangeRef.current({
-      approved: false,
-      linkedinDraftId: v.linkedinDraftId,
+      approved,
+      linkedinArtifactId: v.linkedinArtifactId,
+      linkedinRepresentationRevisionId: v.linkedinRepresentationRevisionId,
     });
   };
 
   return (
     <Card className="border-line bg-surface backdrop-blur-none">
       <CardHeader>
-        <CardTitle>Review LinkedIn post draft</CardTitle>
+        <CardTitle>Post this to LinkedIn?</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {(v.linkedinAccountName || v.destinationName || v.destinationType) && (
@@ -143,33 +137,32 @@ export default function BlogLinkedinDraftReviewRenderer({
           </div>
         )}
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="blog-linkedin-draft-content">
-            LinkedIn post content
+          <Label htmlFor="blog-linkedin-post-content">
+            The post that goes out
           </Label>
-          <Textarea
-            id="blog-linkedin-draft-content"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={12}
-            disabled={disabled === true}
-          />
+          <p
+            id="blog-linkedin-post-content"
+            className="whitespace-pre-wrap rounded-md border border-line bg-surface p-3 text-sm text-foreground"
+          >
+            {v.content}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            These are the words you continued with. To change them, go back to
+            the review of the post.
+          </p>
         </div>
       </CardContent>
       <CardFooter className="flex justify-end gap-2">
         <Button
           variant="outline"
-          onClick={handleReject}
+          onClick={decide(false)}
           disabled={buttonsDisabled}
           type="button"
         >
-          Reject
+          Do not post
         </Button>
-        <Button
-          onClick={handleApprove}
-          disabled={approveDisabled}
-          type="button"
-        >
-          Approve &amp; publish
+        <Button onClick={decide(true)} disabled={buttonsDisabled} type="button">
+          Post to LinkedIn
         </Button>
       </CardFooter>
     </Card>
