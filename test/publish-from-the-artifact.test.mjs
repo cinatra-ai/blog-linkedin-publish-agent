@@ -6,8 +6,7 @@
 // its flow — so every case below reads those two files. Each names the sentence
 // it serves.
 
-import { test } from "node:test";
-import assert from "node:assert/strict";
+import { expect, test } from "vitest";
 
 import {
   artifactDependencies,
@@ -20,7 +19,7 @@ import {
   passthroughNodes,
   source,
   titles,
-} from "./oas-contract.test.mjs";
+} from "./__tests__/contract-readers.mjs";
 
 const ADDRESS_KEYS = [
   "linkedinPublishedUrl",
@@ -34,18 +33,18 @@ const ADDRESS_KEYS = [
 
 test("the flow takes an artifact reference, not a blog record", () => {
   const inputs = titles(oas.inputs);
-  assert.ok(inputs.includes("linkedinArtifactId"), "linkedinArtifactId is an input");
-  assert.ok(
-    inputs.includes("linkedinRepresentationRevisionId"),
+  expect(inputs, "linkedinArtifactId is an input").toContain("linkedinArtifactId");
+  expect(
+    inputs,
     "the revision the person continued with is an input",
-  );
-  assert.ok(!inputs.includes("projectId"), "the blog project id is gone");
-  assert.ok(!inputs.includes("postId"), "the blog post record id is gone");
+  ).toContain("linkedinRepresentationRevisionId");
+  expect(inputs, "the blog project id is gone").not.toContain("projectId");
+  expect(inputs, "the blog post record id is gone").not.toContain("postId");
 });
 
 test("the artifact reference is what the person is asked for", () => {
   const meta = node("start").metadata.cinatra;
-  assert.deepEqual(meta.required, [
+  expect(meta.required).toEqual([
     "linkedinArtifactId",
     "linkedinRepresentationRevisionId",
     "linkedinAccountId",
@@ -53,34 +52,33 @@ test("the artifact reference is what the person is asked for", () => {
     "destinationId",
     "destinationName",
   ]);
-  assert.ok(
-    meta.hidden.includes("blogPostUrl"),
+  expect(
+    meta.hidden,
     "the blog address is filled in at the publishing step, never guessed at the start",
-  );
+  ).toContain("blogPostUrl");
 });
 
 test("the copy comes from the PINNED revision, read through the host's primitive", () => {
   const read = passthroughNodes().get("artifact_content_read");
-  assert.ok(read, "a deterministic node reads the artifact's content");
-  assert.equal(read.data.input.artifactId, "{{ linkedinArtifactId }}");
-  assert.equal(
+  expect(read, "a deterministic node reads the artifact's content").toBeTruthy();
+  expect(read.data.input.artifactId).toBe("{{ linkedinArtifactId }}");
+  expect(
     read.data.input.representationRevisionId,
-    "{{ linkedinRepresentationRevisionId }}",
     "the read is pinned to the revision the person continued with, never the latest",
-  );
-  assert.equal(read.metadata.cinatra.riskClass, "read_only");
+  ).toBe("{{ linkedinRepresentationRevisionId }}");
+  expect(read.metadata.cinatra.riskClass).toBe("read_only");
 });
 
 test("the read is admitted by a declared artifact dependency", () => {
-  assert.ok(
-    artifactDependencies().includes("@cinatra-ai/linkedin-artifacts"),
+  expect(
+    artifactDependencies(),
     "the type's owning package is declared, which is what admits the read",
-  );
+  ).toContain("@cinatra-ai/linkedin-artifacts");
   for (const primitive of ["artifacts_get", "artifact_content_read"]) {
-    assert.ok(
-      consumedPrimitives().includes(primitive),
+    expect(
+      consumedPrimitives(),
       `${primitive} is declared in cinatra.consumes`,
-    );
+    ).toContain(primitive);
   }
 });
 
@@ -91,46 +89,45 @@ test("the copy the orchestration posts is that read, not text of its own", () =>
       e.source_output === "text" &&
       e.destination_node.$component_ref === "publish",
   );
-  assert.ok(fed, "the pinned revision's text feeds the orchestration node");
-  assert.match(
+  expect(fed, "the pinned revision's text feeds the orchestration node").toBeTruthy();
+  expect(
     bridgeNode().data.system,
-    /YOU DO NOT WRITE\./,
     "the recipe forbids drafting: the writer made the post, this agent publishes it",
-  );
+  ).toMatch(/YOU DO NOT WRITE\./);
 });
 
 // ---------------------------------------------------------------------------
 // 2. "both return receipts, not artifacts" + the address written back
 // ---------------------------------------------------------------------------
 
-test("the agent emits no new artifact — it re-targets the one it was handed", () => {
-  assert.ok(!consumedPrimitives().includes("artifact_authoring_emit"));
-  assert.ok(!oasText().includes("artifact_authoring_emit"));
-  // The declaration table gives this agent one produced type: the LinkedIn
-  // post-draft it re-targets mid-run. Producing it is a write onto the artifact
-  // it was given, never an authoring emit and never a second artifact.
-  assert.deepEqual(
-    manifest.cinatra.produces.map((e) => e.objectTypeId),
-    ["@cinatra-ai/linkedin:post-draft"],
-    "the publisher re-targets the post-draft it was handed, and nothing else",
-  );
+test("the agent emits no new artifact — it annotates the one it was handed", () => {
+  expect(consumedPrimitives()).not.toContain("artifact_authoring_emit");
+  expect(oasText()).not.toContain("artifact_authoring_emit");
+  // And so it declares no produced type. The only write this flow makes is the
+  // three-key address patch merged onto the artifact it was given: an address
+  // recorded on an existing row, not a revision of the post's words. A produced
+  // type would have to name a revision this flow persists, and there is none —
+  // the writer agent authors the post-draft and declares it against its own end
+  // node's binding.
+  expect(
+    manifest.cinatra.produces,
+    "the publisher annotates the post-draft it was handed, and produces nothing",
+  ).toEqual([]);
 });
 
 test("the address is written back onto the SAME artifact, through the host's write-back primitive", () => {
   const write = passthroughNodes().get("objects_update");
-  assert.ok(write, "a deterministic node writes through objects_update");
-  assert.equal(
+  expect(write, "a deterministic node writes through objects_update").toBeTruthy();
+  expect(
     write.data.input.objectId,
-    "{{ linkedinArtifactId }}",
     "the write lands on the artifact that was read, never a new row",
-  );
-  assert.equal(write.data.input.data, "{{ addressPatch }}");
-  assert.notEqual(
+  ).toBe("{{ linkedinArtifactId }}");
+  expect(write.data.input.data).toBe("{{ addressPatch }}");
+  expect(
     write.metadata.cinatra.riskClass,
-    "read_only",
     "a persisting node is never labelled read_only",
-  );
-  assert.ok(consumedPrimitives().includes("objects_update"));
+  ).not.toBe("read_only");
+  expect(consumedPrimitives()).toContain("objects_update");
 });
 
 test("the address never travels a side channel", () => {
@@ -142,33 +139,32 @@ test("the address never travels a side channel", () => {
     "blog_post_publish_linkedin_cancel",
     "blog_project_get",
   ]) {
-    assert.ok(
-      !text.includes(forbidden),
+    expect(
+      text,
       `${forbidden} is gone from the flow — the publish is not keyed by a blog record`,
-    );
-    assert.ok(
-      !consumedPrimitives().includes(forbidden),
+    ).not.toContain(forbidden);
+    expect(
+      consumedPrimitives(),
       `${forbidden} is gone from cinatra.consumes`,
-    );
+    ).not.toContain(forbidden);
   }
 });
 
 test("the patch carries exactly the three address keys", () => {
   const system = bridgeNode().data.system;
   for (const key of ADDRESS_KEYS) {
-    assert.ok(system.includes(`"${key}"`), `the recipe names ${key}`);
+    expect(system, `the recipe names ${key}`).toContain(`"${key}"`);
   }
   const patchOutput = bridgeNode().outputs.find((o) => o.title === "addressPatch");
-  assert.ok(patchOutput, "the orchestration emits the patch");
-  assert.equal(patchOutput.type, "object");
+  expect(patchOutput, "the orchestration emits the patch").toBeTruthy();
+  expect(patchOutput.type).toBe("object");
 });
 
 test("nothing published means nothing written", () => {
-  assert.match(
+  expect(
     bridgeNode().data.system,
-    /`addressPatch` is `\{\}` exactly/,
     "the recipe states the empty patch, so no empty address is ever merged",
-  );
+  ).toMatch(/`addressPatch` is `\{\}` exactly/);
 });
 
 // ---------------------------------------------------------------------------
@@ -186,28 +182,28 @@ test("the end node hands the pipeline the address it published", () => {
     "addressWritten",
     "summary",
   ]) {
-    assert.ok(outputs.includes(t), `${t} is a declared output`);
+    expect(outputs, `${t} is a declared output`).toContain(t);
   }
-  assert.deepEqual(titles(node("end").outputs), outputs);
-  assert.ok(!outputs.includes("linkedinDraftId"), "the blog-record draft id is not an output");
+  expect(titles(node("end").outputs)).toEqual(outputs);
+  expect(outputs, "the blog-record draft id is not an output").not.toContain("linkedinDraftId");
 });
 
 test("the person confirms BEFORE anything goes out", () => {
   const system = bridgeNode().data.system;
   const gate = system.indexOf("### Step 1 — the confirmation");
   const post = system.indexOf("### Step 2 — post it");
-  assert.ok(gate > 0, "the recipe opens with the confirmation");
-  assert.ok(post > gate, "the publish comes after it");
-  assert.deepEqual(oas.metadata.cinatra.hitlScreens, [
+  expect(gate, "the recipe opens with the confirmation").toBeGreaterThan(0);
+  expect(post, "the publish comes after it").toBeGreaterThan(gate);
+  expect(oas.metadata.cinatra.hitlScreens).toEqual([
     "@cinatra-ai/blog-linkedin-publish-agent:draft-review",
   ]);
 });
 
 test("the publish goes through the declared connector", () => {
-  assert.ok(consumedPrimitives().includes("linkedin_post_publish"));
-  assert.ok(bridgeNode().data.system.includes("linkedin_post_publish"));
+  expect(consumedPrimitives()).toContain("linkedin_post_publish");
+  expect(bridgeNode().data.system).toContain("linkedin_post_publish");
   const declared = (manifest.cinatra.dependencies ?? []).map((d) => d.packageName);
-  assert.ok(declared.includes("@cinatra-ai/linkedin-connector"));
+  expect(declared).toContain("@cinatra-ai/linkedin-connector");
 });
 
 // ---------------------------------------------------------------------------
@@ -224,34 +220,36 @@ test("every node input is fed and every edge resolves", () => {
   for (const e of oas.data_flow_connections) {
     const src = comps[e.source_node.$component_ref];
     const dst = comps[e.destination_node.$component_ref];
-    assert.ok(src, `edge source ${e.source_node.$component_ref} exists`);
-    assert.ok(dst, `edge destination ${e.destination_node.$component_ref} exists`);
-    assert.ok(
-      titles(src.outputs ?? src.inputs).includes(e.source_output),
+    expect(src, `edge source ${e.source_node.$component_ref} exists`).toBeTruthy();
+    expect(dst, `edge destination ${e.destination_node.$component_ref} exists`).toBeTruthy();
+    expect(
+      titles(src.outputs ?? src.inputs),
       `${e.name}: ${e.source_node.$component_ref} emits ${e.source_output}`,
-    );
-    assert.ok(
-      titles(dst.inputs ?? dst.outputs).includes(e.destination_input),
+    ).toContain(e.source_output);
+    expect(
+      titles(dst.inputs ?? dst.outputs),
       `${e.name}: ${e.destination_node.$component_ref} takes ${e.destination_input}`,
-    );
+    ).toContain(e.destination_input);
   }
   for (const [id, c] of Object.entries(comps)) {
     if (id === "start") continue;
     for (const input of titles(c.inputs)) {
-      assert.ok(fed.has(`${id}.${input}`), `${id}.${input} has an inbound edge`);
+      expect([...fed], `${id}.${input} has an inbound edge`).toContain(`${id}.${input}`);
     }
   }
 });
 
 test("the HITL screen shows the pinned copy and does not edit it", () => {
   const renderer = source("src/renderers/draft-review.tsx");
-  assert.match(renderer, /linkedinArtifactId/);
-  assert.match(renderer, /linkedinRepresentationRevisionId/);
-  assert.ok(!renderer.includes("linkedinDraftId"), "the blog-record draft id is gone from the screen");
-  assert.ok(
-    !renderer.includes("Textarea"),
-    "the screen no longer edits the copy — what is published is the revision the person continued with",
+  expect(renderer).toMatch(/linkedinArtifactId/);
+  expect(renderer).toMatch(/linkedinRepresentationRevisionId/);
+  expect(renderer, "the blog-record draft id is gone from the screen").not.toContain(
+    "linkedinDraftId",
   );
+  expect(
+    renderer,
+    "the screen no longer edits the copy — what is published is the revision the person continued with",
+  ).not.toContain("Textarea");
 });
 
 // ---------------------------------------------------------------------------
@@ -273,50 +271,44 @@ const edgeInto = (dn, di) =>
 
 test("a cut-short read is never posted as the pinned revision", () => {
   const read = passthroughNodes().get("artifact_content_read");
-  assert.ok(
-    titles(read.outputs).includes("truncated"),
-    "the host's read reports truncation",
-  );
-  assert.ok(
-    titles(bridgeNode().inputs).includes("truncated"),
+  expect(titles(read.outputs), "the host's read reports truncation").toContain("truncated");
+  expect(
+    titles(bridgeNode().inputs),
     "the orchestration step is told about it",
-  );
-  assert.ok(
+  ).toContain("truncated");
+  expect(
     dataEdge("read_post_text", "truncated", "publish", "truncated"),
     "and it is actually wired, not merely declared",
-  );
+  ).toBeTruthy();
   const recipe = bridgeNode().data.system;
-  assert.match(recipe, /When `truncated` is true/);
-  assert.match(recipe, /Never post a cut-short copy/);
+  expect(recipe).toMatch(/When `truncated` is true/);
+  expect(recipe).toMatch(/Never post a cut-short copy/);
 });
 
 test("the run reports the address as written only when a patch was built", () => {
-  assert.ok(
-    titles(bridgeNode().outputs).includes("addressWritten"),
+  expect(
+    titles(bridgeNode().outputs),
     "the orchestration step says whether it built a patch",
-  );
+  ).toContain("addressWritten");
   const e = edgeInto("end", "addressWritten");
-  assert.ok(e, "the end node's addressWritten is fed");
-  assert.equal(
+  expect(e, "the end node's addressWritten is fed").toBeTruthy();
+  expect(
     e.source_node.$component_ref,
-    "publish",
     "from the step that knows whether there was an address — the write node's ok is true for an empty patch too",
-  );
-  assert.equal(e.source_output, "addressWritten");
+  ).toBe("publish");
+  expect(e.source_output).toBe("addressWritten");
 });
 
 test("the patch's key space is declared closed, not only described", () => {
   const write = passthroughNodes().get("objects_update");
-  assert.deepEqual(
+  expect(
     write.metadata.cinatra.addressPatchKeys,
-    ADDRESS_KEYS,
     "the allowlist is a declaration the next leg can read",
-  );
+  ).toEqual(ADDRESS_KEYS);
   const recipe = bridgeNode().data.system;
-  assert.match(recipe, /The patch's key space is CLOSED/);
-  assert.match(
+  expect(recipe).toMatch(/The patch's key space is CLOSED/);
+  expect(
     recipe,
-    /never a field of the artifact itself/,
     "an invented key would land on the artifact's own data",
-  );
+  ).toMatch(/never a field of the artifact itself/);
 });

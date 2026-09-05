@@ -5,7 +5,7 @@
   "description": "Publishes the LinkedIn post ARTIFACT revision a person continued with to a connected LinkedIn destination and writes the address back onto that artifact. Takes an artifact reference (linkedinArtifactId + linkedinRepresentationRevisionId), confirms with the person before anything goes out, posts through the LinkedIn connector, and merges the address onto the artifact's data. Returns a receipt, never a new artifact — the LinkedIn writer authors the post, this agent does not.",
   "type": "module",
   "scripts": {
-    "test": "sh -c \"node --test\""
+    "test": "vitest run"
   },
   "files": [
     "cinatra",
@@ -28,7 +28,8 @@
     }
   },
   "devDependencies": {
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "vitest": "^4.0.0"
   },
   "cinatra": {
     "apiVersion": "cinatra.ai/v1",
@@ -95,11 +96,6 @@
     "hasApprovalGates": false,
     "toolAccess": [],
     "ownerOrgId": null,
-    "produces": [
-      {
-        "extension": "@cinatra-ai/linkedin-artifacts",
-        "objectTypeId": "@cinatra-ai/linkedin:post-draft"
-      }
-    ]
+    "produces": []
   }
 }
