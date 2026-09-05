@@ -21,10 +21,9 @@
 //     placeholder is inferred as an input, so parity cannot be violated; only
 //     an explicit inputs[] (an empty one included) is an assertion to check.
 
-import { test } from "node:test";
-import assert from "node:assert/strict";
+import { expect, test } from "vitest";
 
-import { components } from "./oas-contract.test.mjs";
+import { components } from "./__tests__/contract-readers.mjs";
 
 const PLACEHOLDER_SOURCES = [
   "url",
@@ -70,12 +69,12 @@ const missingFrom = (a, b) => [...a].filter((x) => !b.has(x));
 
 test("the flow declares ApiNodes with explicit inputs to check", () => {
   const nodes = apiNodes();
-  assert.ok(nodes.length > 0, "the flow declares no ApiNode at all");
+  expect(nodes.length, "the flow declares no ApiNode at all").toBeGreaterThan(0);
   const checked = nodes.filter(([, c]) => declared(c) !== null);
-  assert.ok(
-    checked.length > 0,
+  expect(
+    checked.length,
     "no ApiNode declares inputs[], so the parity scan below checks nothing",
-  );
+  ).toBeGreaterThan(0);
 });
 
 test("no ApiNode declares an input its template never renders", () => {
@@ -87,7 +86,7 @@ test("no ApiNode declares an input its template never renders", () => {
       dead.push(`${id}.${name}`);
     }
   }
-  assert.deepEqual(dead, [], `inputs no template renders: ${dead.join(", ")}`);
+  expect(dead, `inputs no template renders: ${dead.join(", ")}`).toEqual([]);
 });
 
 test("no ApiNode renders a placeholder its inputs never declare", () => {
@@ -99,9 +98,8 @@ test("no ApiNode renders a placeholder its inputs never declare", () => {
       undeclared.push(`${id}.${name}`);
     }
   }
-  assert.deepEqual(
+  expect(
     undeclared,
-    [],
     `placeholders no input declares: ${undeclared.join(", ")}`,
-  );
+  ).toEqual([]);
 });

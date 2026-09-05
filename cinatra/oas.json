@@ -15,12 +15,7 @@
         "preferredProvider": "openai",
         "preferredModel": "gpt-5.5"
       },
-      "produces": [
-        {
-          "extension": "@cinatra-ai/linkedin-artifacts",
-          "objectTypeId": "@cinatra-ai/linkedin:post-draft"
-        }
-      ]
+      "produces": []
     }
   },
   "inputs": [
