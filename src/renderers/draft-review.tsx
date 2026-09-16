@@ -18,22 +18,19 @@
 //
 // A source mirror the host builds into its own graph: props type comes from the
 // public `@cinatra-ai/sdk-ui/field-renderer-props` contract (an agent extension
-// may import only @cinatra-ai/sdk-extensions + @cinatra-ai/sdk-ui as first-party
-// code); the shadcn primitives are VENDORED (own-your-code copies under
-// ./components/ui), not imported from the host `@/` alias.
+// takes first-party code from two classes only: the SDK packages
+// @cinatra-ai/sdk-extensions + @cinatra-ai/sdk-ui, and the HOST-SERVED modules
+// the kind gate carries); the product primitives come from the HOST-SHARED module
+// `@cinatra-ai/design-primitives` (cinatra#3471 slice 3) — the host serves its
+// own ONE instance through its build-time path map, so there is no copy left to
+// drift — while `label` stays VENDORED (an own-your-code copy under
+// ./components/ui) until its own slice. Neither road is the host `@/` alias.
 
 import { useEffect, useMemo, useRef } from "react";
 
 import type { FieldRendererProps } from "@cinatra-ai/sdk-ui/field-renderer-props";
 
-import { Button } from "../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
+import { Button, Card, CardContent, CardFooter, CardHeader, CardTitle } from "@cinatra-ai/design-primitives";
 import { Label } from "../components/ui/label";
 
 type DraftReviewValue = {
