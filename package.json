@@ -1,6 +1,6 @@
 {
   "name": "@cinatra-ai/blog-linkedin-publish-agent",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "license": "Apache-2.0",
   "description": "Publishes the LinkedIn post ARTIFACT revision a person continued with to a connected LinkedIn destination and writes the address back onto that artifact. Takes an artifact reference (linkedinArtifactId + linkedinRepresentationRevisionId), confirms with the person before anything goes out, posts through the LinkedIn connector, and merges the address onto the artifact's data. Returns a receipt, never a new artifact — the LinkedIn writer authors the post, this agent does not.",
   "type": "module",
@@ -9,7 +9,8 @@
   },
   "files": [
     "cinatra",
-    "src"
+    "src",
+    "!src/__tests__"
   ],
   "peerDependencies": {
     "@cinatra-ai/sdk-extensions": "*",
