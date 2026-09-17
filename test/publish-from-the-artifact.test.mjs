@@ -158,6 +158,20 @@ test("the patch carries exactly the three address keys", () => {
   const patchOutput = bridgeNode().outputs.find((o) => o.title === "addressPatch");
   expect(patchOutput, "the orchestration emits the patch").toBeTruthy();
   expect(patchOutput.type).toBe("object");
+  expect(
+    Object.keys(patchOutput.json_schema?.properties ?? {}),
+    "the three members are DECLARED, not only described — an object level with no declared members is sent as a closed, empty object",
+  ).toEqual(ADDRESS_KEYS);
+  for (const key of ADDRESS_KEYS) {
+    expect(
+      patchOutput.json_schema.properties[key].type,
+      `${key} is declared a string — every value is a non-empty string LinkedIn returned`,
+    ).toBe("string");
+  }
+  expect(
+    patchOutput.json_schema.required,
+    "the derived contract carries no optional key, so every declared member is required",
+  ).toEqual(ADDRESS_KEYS);
 });
 
 test("nothing published means nothing written", () => {
