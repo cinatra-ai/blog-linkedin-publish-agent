@@ -730,7 +730,30 @@
         },
         {
           "title": "addressPatch",
-          "type": "object"
+          "type": "object",
+          "description": "The three-key address patch the write-back step merges onto the LinkedIn post artifact's own data. Its members are declared here, so the structured-output contract derived from this declaration is closed and carries no optional key: an answer is expected to carry all three keys. That closed contract cannot express the recipe's empty case — nothing published, so `addressPatch` is `{}` exactly — and this description records that remaining gap rather than hiding it. The recipe's own rule stands unchanged and is what the orchestration follows: every value is a non-empty string LinkedIn actually returned, a key that cannot be filled that way is not put in the patch, and a patch that cannot be filled completely is `{}`, which merges nothing onto the artifact.",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "linkedinPublishedUrl": {
+                "type": "string",
+                "description": "The address the post was published to, exactly as LinkedIn returned it for the post this run made. A non-empty string; never guessed."
+              },
+              "linkedinPublishedExternalId": {
+                "type": "string",
+                "description": "LinkedIn's own id for that published post (its URN), exactly as LinkedIn returned it. A non-empty string; never guessed."
+              },
+              "linkedinPublishedRevisionId": {
+                "type": "string",
+                "description": "The post-draft revision the person continued with — the pinned revision that was published, as it was given to this step. A non-empty string."
+              }
+            },
+            "required": [
+              "linkedinPublishedUrl",
+              "linkedinPublishedExternalId",
+              "linkedinPublishedRevisionId"
+            ]
+          }
         },
         {
           "title": "addressWritten",
