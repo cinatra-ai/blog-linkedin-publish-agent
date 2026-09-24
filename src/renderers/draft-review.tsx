@@ -33,6 +33,7 @@ import type { FieldRendererProps } from "@cinatra-ai/sdk-ui/field-renderer-props
 import { Button, Card, CardContent, CardFooter, CardHeader, CardTitle } from "@cinatra-ai/design-primitives";
 import { Label } from "../components/ui/label";
 import { draftReviewDecision } from "./draft-review-decision";
+import { screenBlogPostUrl } from "./draft-review-decision";
 
 type DraftReviewValue = {
   linkedinArtifactId: string;
@@ -73,6 +74,7 @@ export default function BlogLinkedinDraftReviewRenderer({
   disabled,
 }: FieldRendererProps) {
   const v = useMemo(() => toDraftReviewValue(value), [value]);
+  const blogPostUrl = screenBlogPostUrl(v);
 
   const onChangeRef = useRef(onChange);
   useEffect(() => {
@@ -107,7 +109,7 @@ export default function BlogLinkedinDraftReviewRenderer({
         <CardTitle>Post this to LinkedIn?</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {(v.linkedinAccountName || v.destinationName || v.destinationType) && (
+        {(v.linkedinAccountName || v.destinationName || v.destinationType || blogPostUrl) && (
           <div className="grid gap-1 text-sm text-muted-foreground">
             {v.linkedinAccountName && (
               <p>
@@ -123,16 +125,16 @@ export default function BlogLinkedinDraftReviewRenderer({
                 {v.destinationName}
               </p>
             )}
-            {v.blogPostUrl && (
+            {blogPostUrl && (
               <p>
                 <span className="text-foreground">Blog post:</span>{" "}
                 <a
-                  href={v.blogPostUrl}
+                  href={blogPostUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="underline-offset-4 hover:underline"
                 >
-                  {v.blogPostUrl}
+                  {blogPostUrl}
                 </a>
               </p>
             )}

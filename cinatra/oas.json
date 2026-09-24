@@ -34,7 +34,7 @@
     {
       "title": "linkedinAccountName",
       "type": "string",
-      "default": ""
+      "description": "The LinkedIn account's name in words, as you know it, for example Dana Okafor."
     },
     {
       "title": "destinationType",
@@ -604,12 +604,12 @@
             "linkedinArtifactId",
             "linkedinRepresentationRevisionId",
             "linkedinAccountId",
+            "linkedinAccountName",
             "destinationType",
             "destinationId",
             "destinationName"
           ],
           "hidden": [
-            "linkedinAccountName",
             "blogPostUrl",
             "cinatra_run_id"
           ],
@@ -632,7 +632,7 @@
         {
           "title": "linkedinAccountName",
           "type": "string",
-          "default": ""
+          "description": "The LinkedIn account's name in words, as you know it, for example Dana Okafor."
         },
         {
           "title": "destinationType",

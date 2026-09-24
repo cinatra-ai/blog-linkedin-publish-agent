@@ -32,3 +32,21 @@ export function draftReviewDecision(
     }),
   };
 }
+
+/** The blog post the screen names: the given address, else the words' own last line when it is one http or https address, else nothing. */
+export function screenBlogPostUrl(v: { blogPostUrl?: string; content?: string }): string {
+  const given = (v.blogPostUrl ?? "").trim();
+  if (given !== "") return given;
+  const lines = (v.content ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  const last = lines[lines.length - 1] ?? "";
+  if (last === "" || /\s/.test(last)) return "";
+  try {
+    const { protocol } = new URL(last);
+    return protocol === "http:" || protocol === "https:" ? last : "";
+  } catch {
+    return "";
+  }
+}

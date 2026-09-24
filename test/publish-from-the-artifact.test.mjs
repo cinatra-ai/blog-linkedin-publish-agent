@@ -48,6 +48,7 @@ test("the artifact reference is what the person is asked for", () => {
     "linkedinArtifactId",
     "linkedinRepresentationRevisionId",
     "linkedinAccountId",
+    "linkedinAccountName",
     "destinationType",
     "destinationId",
     "destinationName",
@@ -56,6 +57,9 @@ test("the artifact reference is what the person is asked for", () => {
     meta.hidden,
     "the blog address is filled in at the publishing step, never guessed at the start",
   ).toContain("blogPostUrl");
+  expect(meta.hidden, "the account's name in words is asked, not hidden").not.toContain(
+    "linkedinAccountName",
+  );
 });
 
 test("the copy comes from the PINNED revision, read through the host's primitive", () => {

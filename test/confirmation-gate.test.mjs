@@ -26,7 +26,7 @@ import {
   titles,
 } from "./__tests__/contract-readers.mjs";
 
-import { draftReviewDecision } from "../src/renderers/draft-review-decision.ts";
+import { draftReviewDecision, screenBlogPostUrl } from "../src/renderers/draft-review-decision.ts";
 
 const RENDERER = "@cinatra-ai/blog-linkedin-publish-agent:draft-review";
 const PLAIN_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -218,4 +218,54 @@ test("the screen's decision is carried in the answer, for a post and for a decli
   expect(renderer).toMatch(/onChangeRef\.current\(\s*draftReviewDecision\(/);
   expect(renderer, "the approve button decides true").toContain("onClick={decide(true)}");
   expect(renderer, "the decline button decides false").toContain("onClick={decide(false)}");
+});
+
+// ---------------------------------------------------------------------------
+// (v) the screen names where the words go and the blog post they point to
+// ---------------------------------------------------------------------------
+
+// The account is named on the screen, so the person is asked its name in words.
+test("the account is asked by its name in words, as the destination is", () => {
+  const flowInput = (oas.inputs ?? []).find((i) => i.title === "linkedinAccountName");
+  const start = node("start");
+  const startInput = (start.inputs ?? []).find((i) => i.title === "linkedinAccountName");
+  expect(flowInput, "the flow declares the account's name").toBeTruthy();
+  expect(startInput, "the start declares the account's name").toBeTruthy();
+  expect(Object.hasOwn(flowInput, "default"), "the flow gives it no empty default").toBe(false);
+  expect(Object.hasOwn(startInput, "default"), "the start gives it no empty default").toBe(false);
+  const meta = start.metadata.cinatra;
+  expect(meta.required, "the account's name is asked").toContain("linkedinAccountName");
+  expect(meta.hidden, "the account's name is not hidden").not.toContain("linkedinAccountName");
+});
+
+// The blog post is named from the given address, else from the words' own last line.
+test("the screen names the blog post the words point to", () => {
+  const url = "https://blog.acme.example/why-migrations-are-the-hardest-part";
+  expect(screenBlogPostUrl({ blogPostUrl: ` ${url} `, content: "Words." })).toBe(url);
+  for (const blogPostUrl of ["", undefined]) {
+    expect(screenBlogPostUrl({ blogPostUrl, content: `Words.\n\n${url}` })).toBe(url);
+    expect(screenBlogPostUrl({ blogPostUrl, content: `Words.\n\n${url}\n` })).toBe(url);
+  }
+  for (const content of [
+    "Words.\n\nA last line of prose.",
+    `Words.\n\nRead it at ${url} today.`,
+    `Words.\n\n${url}\n\nA closing line.`,
+    "Words.\n\nftp://blog.acme.example/why-migrations-are-the-hardest-part",
+    "",
+  ]) {
+    expect(screenBlogPostUrl({ blogPostUrl: "", content })).toBe("");
+  }
+  expect(screenBlogPostUrl({})).toBe("");
+});
+
+// The card draws each line it has a value for, the blog post included.
+test("the screen draws the account, the destination and the blog post lines when it has them", () => {
+  const renderer = source("src/renderers/draft-review.tsx");
+  expect(renderer).toContain("screenBlogPostUrl");
+  expect(renderer).toMatch(/Account:<\/span>\{" "\}\s*\{v\.linkedinAccountName\}/);
+  expect(renderer).toContain("Blog post:");
+  expect(renderer).toContain("href={blogPostUrl}");
+  expect(renderer).toContain(
+    "(v.linkedinAccountName || v.destinationName || v.destinationType || blogPostUrl)",
+  );
 });
