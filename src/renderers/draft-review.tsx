@@ -32,6 +32,7 @@ import type { FieldRendererProps } from "@cinatra-ai/sdk-ui/field-renderer-props
 
 import { Button, Card, CardContent, CardFooter, CardHeader, CardTitle } from "@cinatra-ai/design-primitives";
 import { Label } from "../components/ui/label";
+import { draftReviewDecision } from "./draft-review-decision";
 
 type DraftReviewValue = {
   linkedinArtifactId: string;
@@ -87,13 +88,17 @@ export default function BlogLinkedinDraftReviewRenderer({
     v.linkedinRepresentationRevisionId.trim() !== "";
   const buttonsDisabled = disabled === true || !hasReference;
 
+  // The decision rides the gate's answer: the host resumes the flow with the
+  // `userResponse` string, so it carries the approved flag and the two ids.
   const decide = (approved: boolean) => () => {
     if (!hasReference) return;
-    onChangeRef.current({
-      approved,
-      linkedinArtifactId: v.linkedinArtifactId,
-      linkedinRepresentationRevisionId: v.linkedinRepresentationRevisionId,
-    });
+    onChangeRef.current(
+      draftReviewDecision(
+        approved,
+        v.linkedinArtifactId,
+        v.linkedinRepresentationRevisionId,
+      ),
+    );
   };
 
   return (

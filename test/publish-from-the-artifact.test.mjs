@@ -122,7 +122,14 @@ test("the address is written back onto the SAME artifact, through the host's wri
     write.data.input.objectId,
     "the write lands on the artifact that was read, never a new row",
   ).toBe("{{ linkedinArtifactId }}");
-  expect(write.data.input.data).toBe("{{ addressPatch }}");
+  // The patch reaches the artifact. The pinned runtime renders every leaf of an
+  // ApiNode's data as a string, so the leaf carries the patch as JSON text
+  // encoding an object (`{}` when nothing was published), which the host's
+  // objects_update seam parses; the hint keeps addressPatch visible to the
+  // runtime's placeholder inference.
+  expect(write.data.input.data).toBe(
+    "{# pyagentspec-input-hint: {{ addressPatch }} #}{{ addressPatch | tojson }}",
+  );
   expect(
     write.metadata.cinatra.riskClass,
     "a persisting node is never labelled read_only",
