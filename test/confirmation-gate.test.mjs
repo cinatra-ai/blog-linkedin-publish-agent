@@ -83,7 +83,7 @@ test("exactly one InputMessageNode gate stands on every control path from start 
 });
 
 // ---------------------------------------------------------------------------
-// (ii) the gate has the shape the pinned runtime mounts (OAS-RUNTIME-013)
+// (ii) the gate has the shape the pinned runtime mounts
 // ---------------------------------------------------------------------------
 
 test("the gate names the pack's screen and has the mountable gate shape", () => {
