@@ -787,7 +787,7 @@
         "tool": "objects_update",
         "input": {
           "objectId": "{{ linkedinArtifactId }}",
-          "data": "{{ addressPatch }}"
+          "data": "{# pyagentspec-input-hint: {{ addressPatch }} #}{{ addressPatch | tojson }}"
         },
         "agent_run_id": "{{ cinatra_run_id }}"
       },
@@ -821,7 +821,7 @@
           "riskClass": "write",
           "requiresApproval": false,
           "packageName": "@cinatra-ai/blog-linkedin-publish-agent",
-          "description": "THE WRITE-BACK, and the only road it takes: objects_update merges the patch into the SAME artifact row's data (objects.data) — never a side channel, never a new artifact, never a blog record. The merge is shallow at the top level, which is why the address keys are flat and destination-prefixed: a second destination's write cannot clobber this one. An empty patch (nothing published) merges nothing.",
+          "description": "THE WRITE-BACK, and the only road it takes: objects_update merges the patch into the SAME artifact row's data (objects.data) — never a side channel, never a new artifact, never a blog record. The merge is shallow at the top level, which is why the address keys are flat and destination-prefixed: a second destination's write cannot clobber this one. An empty patch (nothing published) merges nothing. The patch travels as JSON text: the pinned runtime renders every leaf of this node's data as a string, so the leaf renders addressPatch through tojson (the input hint keeps addressPatch visible to the runtime's placeholder inference) and the host's objects_update seam parses that text back into the object it merges. An installation without that seam refuses the string at path [data], loudly, rather than silently writing nothing.",
           "addressPatchKeys": [
             "linkedinPublishedUrl",
             "linkedinPublishedExternalId",
