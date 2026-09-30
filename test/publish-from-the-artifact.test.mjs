@@ -122,12 +122,65 @@ test("the address is written back onto the SAME artifact, through the host's wri
     write.data.input.objectId,
     "the write lands on the artifact that was read, never a new row",
   ).toBe("{{ linkedinArtifactId }}");
-  expect(write.data.input.data).toBe("{{ addressPatch }}");
+  // The patch reaches the artifact. The pinned runtime renders every leaf of an
+  // ApiNode's data as a string, so the leaf carries the patch as JSON text
+  // encoding an object (`{}` when nothing was published), which the host's
+  // objects_update seam parses; the hint keeps addressPatch visible to the
+  // runtime's placeholder inference.
+  expect(write.data.input.data).toBe(
+    "{# pyagentspec-input-hint: {{ addressPatch }} #}{{ addressPatch | tojson }}",
+  );
   expect(
     write.metadata.cinatra.riskClass,
     "a persisting node is never labelled read_only",
   ).not.toBe("read_only");
   expect(consumedPrimitives()).toContain("objects_update");
+});
+
+// What the runtime writes for one `{{ name | tojson }}` expression: JSON text
+// with sorted keys, ", " and ": " separators, and the ampersand, less-than,
+// greater-than and apostrophe written as \u0026, \u003c, \u003e and \u0027.
+function tojsonText(value) {
+  const keys = Object.keys(value).sort();
+  const body = keys
+    .map((k) => `${JSON.stringify(k)}: ${JSON.stringify(value[k])}`)
+    .join(", ");
+  return `{${body}}`
+    .replaceAll("&", "\\u0026")
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("'", "\\u0027");
+}
+
+// The leaf's text with its comments removed must be exactly one tojson
+// expression; anything else is not JSON text and is refused here.
+function renderLeaf(text, values) {
+  const body = text.replace(/\{#[\s\S]*?#\}/g, "");
+  const m = /^\{\{\s*(\w+)\s*\|\s*tojson\s*\}\}$/.exec(body);
+  if (!m) throw new Error(`the write-back leaf is not one tojson expression: ${body}`);
+  return tojsonText(values[m[1]]);
+}
+
+test("the write-back leaf renders the patch as JSON text of exactly its three declared members", () => {
+  const leaf = passthroughNodes().get("objects_update").data.input.data;
+  const declared = Object.keys(
+    bridgeNode().outputs.find((o) => o.title === "addressPatch").json_schema.properties,
+  );
+  expect(declared, "the members the publish step declares").toEqual(ADDRESS_KEYS);
+  const patch = {
+    linkedinPublishedUrl: "https://example.com/feed/update/1/?a=1&b=2",
+    linkedinPublishedExternalId: "urn:li:share:1",
+    linkedinPublishedRevisionId: "rev-1",
+  };
+  const parsed = JSON.parse(renderLeaf(leaf, { addressPatch: patch }));
+  expect(Object.keys(parsed).sort(), "exactly the declared members").toEqual(
+    [...declared].sort(),
+  );
+  expect(parsed, "every value arrives unchanged, the ampersand included").toEqual(patch);
+  expect(
+    JSON.parse(renderLeaf(leaf, { addressPatch: {} })),
+    "nothing published is the empty record, which merges nothing",
+  ).toEqual({});
 });
 
 test("the address never travels a side channel", () => {
