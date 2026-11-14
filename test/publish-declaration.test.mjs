@@ -17,7 +17,9 @@
 //     no `requiresApproval` other than false).
 //
 // So the prompt-level confirmation and its screen are gone: the host's card is
-// the one stop. The step's prompt runs only after the person approved on that
+// the one stop. The package keeps declaring the former screen's id, without a
+// component, only for a run that paused there before this version (the last
+// case below). The step's prompt runs only after the person approved on that
 // card, so every branch of it returns `approved: true`; a failure shows in the
 // other outputs.
 
@@ -144,8 +146,6 @@ test("the pack keeps no confirm step of its own in front of the publish", () => 
     has(cinatraOf(oas), "hitlScreens"),
     "no root hitlScreens beside the publishing step",
   ).toBe(false);
-  const midRun = (manifest.cinatra.fieldRenderers ?? []).filter((r) => r.midRunHitl === true);
-  expect(midRun, "no mid-run screen is declared").toEqual([]);
   const into = (oas.control_flow_connections ?? [])
     .filter((e) => e.to_node?.$component_ref === "publish")
     .map((e) => components[e.from_node.$component_ref]?.component_type);
@@ -161,7 +161,10 @@ test("the pack keeps no confirm step of its own in front of the publish", () => 
 });
 
 test("the confirmation screen is gone from the package", () => {
-  expect(manifest.cinatra.fieldRenderers ?? [], "no renderer is declared").toEqual([]);
+  expect(
+    (manifest.cinatra.fieldRenderers ?? []).filter((r) => has(r, "component")),
+    "no declared renderer ships a component",
+  ).toEqual([]);
   const renderer = fileURLToPath(new URL("../src/renderers/draft-review.tsx", import.meta.url));
   expect(existsSync(renderer), "the screen's source is deleted").toBe(false);
 });
@@ -203,4 +206,21 @@ test("the published branch returns approved: true after the card approved", () =
     approvedValues(text),
     "the published branch returns approved: true after the card approved",
   ).toEqual(["true"]);
+});
+
+// A run that paused at the former draft-review screen before this version keeps
+// that screen's id in its stored question. The package keeps declaring the id,
+// with no component, so the application still reads that question as a step in
+// the middle of the run and draws its own schema form with Continue for it. The
+// flow never asks with the id: nothing in it names the screen.
+test("the former screen id stays declared, without a component, for a run paused before this version", () => {
+  expect(manifest.cinatra.fieldRenderers).toEqual([
+    {
+      id: "@cinatra-ai/blog-linkedin-publish-agent:draft-review",
+      kind: "linkedin-draft-review",
+      priority: 90,
+      midRunHitl: true,
+    },
+  ]);
+  expect(JSON.stringify(oas), "the flow never names the former screen").not.toContain(":draft-review");
 });
