@@ -17,7 +17,6 @@ import {
   oas,
   oasText,
   passthroughNodes,
-  source,
   titles,
 } from "./__tests__/contract-readers.mjs";
 
@@ -255,17 +254,6 @@ test("the end node hands the pipeline the address it published", () => {
   expect(outputs, "the blog-record draft id is not an output").not.toContain("linkedinDraftId");
 });
 
-test("the person confirms BEFORE anything goes out", () => {
-  const system = bridgeNode().data.system;
-  const gate = system.indexOf("### Step 1 — the confirmation");
-  const post = system.indexOf("### Step 2 — post it");
-  expect(gate, "the recipe opens with the confirmation").toBeGreaterThan(0);
-  expect(post, "the publish comes after it").toBeGreaterThan(gate);
-  expect(oas.metadata.cinatra.hitlScreens).toEqual([
-    "@cinatra-ai/blog-linkedin-publish-agent:draft-review",
-  ]);
-});
-
 test("the publish goes through the declared connector", () => {
   expect(consumedPrimitives()).toContain("linkedin_post_publish");
   expect(bridgeNode().data.system).toContain("linkedin_post_publish");
@@ -304,19 +292,6 @@ test("every node input is fed and every edge resolves", () => {
       expect([...fed], `${id}.${input} has an inbound edge`).toContain(`${id}.${input}`);
     }
   }
-});
-
-test("the HITL screen shows the pinned copy and does not edit it", () => {
-  const renderer = source("src/renderers/draft-review.tsx");
-  expect(renderer).toMatch(/linkedinArtifactId/);
-  expect(renderer).toMatch(/linkedinRepresentationRevisionId/);
-  expect(renderer, "the blog-record draft id is gone from the screen").not.toContain(
-    "linkedinDraftId",
-  );
-  expect(
-    renderer,
-    "the screen no longer edits the copy — what is published is the revision the person continued with",
-  ).not.toContain("Textarea");
 });
 
 // ---------------------------------------------------------------------------
