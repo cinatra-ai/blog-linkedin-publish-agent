@@ -1,8 +1,8 @@
 {
   "name": "@cinatra-ai/blog-linkedin-publish-agent",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "license": "Apache-2.0",
-  "description": "Publishes the LinkedIn post ARTIFACT revision a person continued with to a connected LinkedIn destination and writes the address back onto that artifact. Takes an artifact reference (linkedinArtifactId + linkedinRepresentationRevisionId), waits at the host's publish confirmation before anything goes out, posts through the LinkedIn connector, and merges the address onto the artifact's data. Returns a receipt, never a new artifact — the LinkedIn writer authors the post, this agent does not.",
+  "description": "Publishes the LinkedIn post ARTIFACT revision a person continued with to a connected LinkedIn destination and writes the address back onto that artifact. Takes an artifact reference (linkedinArtifactId + linkedinRepresentationRevisionId), posts the revision the host's review approved (that revision, or the successor a Regenerate made), waits at the host's publish confirmation before anything goes out, posts through the LinkedIn connector, and merges the address onto the artifact's data. Returns a receipt, never a new artifact — the LinkedIn writer authors the post, this agent does not.",
   "type": "module",
   "scripts": {
     "test": "vitest run"
@@ -74,6 +74,12 @@
       {
         "primitive": "linkedin_post_publish",
         "requirement": "required"
+      }
+    ],
+    "tools": [
+      {
+        "name": "approved_post_text",
+        "module": "./cinatra/tools/approved-post-text.mjs"
       }
     ],
     "packageType": "agent",

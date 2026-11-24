@@ -67,12 +67,15 @@ test("the review step is declared in the form the host reads (red: the marker, t
   expect(cinatra.publishes, "the review publishes nothing").toBeUndefined();
 });
 
-test("the review pins exactly the revision the publish posts (red: the target set fed from anything but the two start inputs the content read takes)", () => {
+test("the review pins the revision the run started with, and the read takes the revision its answer approved (red: the target set fed from anything but the two start inputs, or the read fed from the start revision)", () => {
   expect(dataInto(REVIEW, "reviewTargets")).toEqual([`${GATHER}.reviewTargets`]);
   for (const input of ["linkedinArtifactId", "linkedinRepresentationRevisionId"]) {
     expect(dataInto(GATHER, input)).toEqual([`start.${input}`]);
-    expect(dataInto("read_post_text", input)).toEqual([`start.${input}`]);
   }
+  // The answer names the approved revision (publish-the-approved-revision.test.mjs).
+  expect(dataInto("read_post_text", "reviewApproval")).toEqual([`${REVIEW}.reviewApproval`]);
+  expect(dataInto("read_post_text", "linkedinArtifactId"), "the artifact under review").toEqual(["start.linkedinArtifactId"]);
+  expect(dataInto("read_post_text", "linkedinRepresentationRevisionId")).toEqual([]);
   const gather = node(GATHER);
   expect(gather.url).toBe("{{CINATRA_BASE_URL}}/api/agents/passthrough");
   expect(gather.data.tool).toBe("artifacts_get");
