@@ -175,12 +175,16 @@ test("the pack keeps no confirm step of its own in front of the publish", () => 
 // `resolveHitlGateRenderer` (packages/agents/src/orchestrator-mid-run-hitl.ts
 // in cinatra-ai/cinatra, branch fix/unregistered-renderer-falls-to-floor) draws
 // such a step with the application's own schema form and one Continue, on the
-// run panel, the stepper and the standalone card. That change merges before the
-// application pins this package version.
+// run panel, the stepper and the standalone card.
 //
-// Until then, a run parked at the former screen before this version shows "no
-// renderer configured" in the application. That state already exists on the
-// application's main for every retired id, and this package cannot change it.
+// The order (that application change first, this package version second) is
+// held by the application's own pin, not by this package. A package manifest
+// has one field the application enforces against itself, `cinatra.sdkAbiRange`,
+// and it is keyed to the extension SDK's ABI version, which that change does
+// not alter; the bundled loader also checks it only for a package with a server
+// entry, and this package has none. So the application takes this version into
+// `cinatra.extensions` and its lock only in a pull request opened after that
+// change is on its main.
 test("the pack declares no field renderer and ships no screen", () => {
   expect(has(manifest.cinatra, "fieldRenderers"), "no field renderer is declared").toBe(false);
   const renderers = fileURLToPath(new URL("../src/renderers", import.meta.url));
@@ -311,6 +315,58 @@ test("the failure envelope publishes nothing and gives the write step nothing to
   expect(failure.linkedinPostExternalId).toBe("");
   expect(Object.keys(failure.addressPatch)).toEqual(patchMembers());
   expect(Object.values(failure.addressPatch).every((v) => v === "")).toBe(true);
+});
+
+test("the return step chooses the envelope by one rule, and only it sets addressWritten", () => {
+  const text = section(/^### Step \d+ — return/m);
+  expect(text).toMatch(/Return the published envelope ONLY when all three members of the patch are non-empty strings/);
+  expect(text).toMatch(/a partial result \(an address without an id, or an id without an address\)/);
+  const system = node("publish").data.system;
+  const outside = system.replace(text, "");
+  expect(
+    [...outside.matchAll(/addressWritten/g)].length,
+    "outside the return step, addressWritten is only named in the list of answer keys",
+  ).toBe(1);
+  expect(outside, "no other step chooses an envelope by the address alone").not.toMatch(
+    /returned the post's address, return/,
+  );
+});
+
+// The leaf's write condition, as the leaf states it: each named member is
+// present and non-empty.
+const leafRenders = (patch) => {
+  const leaf = node("write_address").data.input.data;
+  const cond = leaf.match(/\{% if ([^%]*) %\}/)[1];
+  const names = [...cond.matchAll(/\('([^']+)' in addressPatch and addressPatch\['\1'\]\)/g)].map(
+    (m) => m[1],
+  );
+  expect(names).toEqual(patchMembers());
+  return names.every((n) => has(patch, n) && patch[n] !== "") ? JSON.stringify(patch) : "{}";
+};
+
+test("a URL without an id is the failure envelope, and the write renders {}", () => {
+  const failure = returnEnvelopes().find((e) => e.addressWritten === false);
+  // LinkedIn returned an address but no id: the answer is the failure envelope,
+  // its summary naming the address.
+  const partial = {
+    ...failure,
+    linkedinArtifactId: "art-1",
+    linkedinRepresentationRevisionId: "rev-1",
+    summary: "Posted at https://www.linkedin.com/feed/update/x but LinkedIn returned no id.",
+  };
+  expect(answerViolations(partial)).toEqual([]);
+  expect(partial.addressWritten).toBe(false);
+  expect(Object.keys(partial.addressPatch)).toEqual(patchMembers());
+  expect(Object.values(partial.addressPatch).every((v) => v === "")).toBe(true);
+  expect(leafRenders(partial.addressPatch)).toBe("{}");
+  // Even a half-filled patch the model should not build writes nothing.
+  expect(
+    leafRenders({
+      linkedinPublishedUrl: "https://www.linkedin.com/feed/update/x",
+      linkedinPublishedExternalId: "",
+      linkedinPublishedRevisionId: "rev-1",
+    }),
+  ).toBe("{}");
 });
 
 test("the published envelope fills every member of the patch", () => {
