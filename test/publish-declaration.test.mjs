@@ -157,16 +157,13 @@ test("the pack keeps no confirm step of its own in front of the publish", () => 
   expect(system, "the recipe pauses at no screen of its own").not.toMatch(/INTERRUPT/);
   expect(system).not.toMatch(/x-renderer/);
   expect(system).not.toMatch(/HITL Gate/);
-  expect(system).not.toContain(":draft-review");
 });
 
-test("the confirmation screen is gone from the package", () => {
-  expect(
-    (manifest.cinatra.fieldRenderers ?? []).filter((r) => has(r, "component")),
-    "no declared renderer ships a component",
-  ).toEqual([]);
-  const renderer = fileURLToPath(new URL("../src/renderers/draft-review.tsx", import.meta.url));
-  expect(existsSync(renderer), "the screen's source is deleted").toBe(false);
+test("the pack declares no field renderer and ships no screen", () => {
+  expect(has(manifest.cinatra, "fieldRenderers"), "no field renderer is declared").toBe(false);
+  const renderers = fileURLToPath(new URL("../src/renderers", import.meta.url));
+  expect(existsSync(renderers), "the package ships no screen source").toBe(false);
+  expect(JSON.stringify(oas), "no step of the flow names a renderer").not.toMatch(/x-renderer/);
 });
 
 // The branches of the step's prompt that run after the card. The person
@@ -206,21 +203,4 @@ test("the published branch returns approved: true after the card approved", () =
     approvedValues(text),
     "the published branch returns approved: true after the card approved",
   ).toEqual(["true"]);
-});
-
-// A run that paused at the former draft-review screen before this version keeps
-// that screen's id in its stored question. The package keeps declaring the id,
-// with no component, so the application still reads that question as a step in
-// the middle of the run and draws its own schema form with Continue for it. The
-// flow never asks with the id: nothing in it names the screen.
-test("the former screen id stays declared, without a component, for a run paused before this version", () => {
-  expect(manifest.cinatra.fieldRenderers).toEqual([
-    {
-      id: "@cinatra-ai/blog-linkedin-publish-agent:draft-review",
-      kind: "linkedin-draft-review",
-      priority: 90,
-      midRunHitl: true,
-    },
-  ]);
-  expect(JSON.stringify(oas), "the flow never names the former screen").not.toContain(":draft-review");
 });
