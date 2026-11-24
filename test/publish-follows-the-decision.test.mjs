@@ -55,12 +55,14 @@ const into = (id) => edges.filter((e) => e.to === id);
 const outOf = (id) => edges.filter((e) => e.from === id);
 
 const START = "start";
+const GATHER_REVIEW = "gather_review_target";
+const REVIEW = "post_review_gate";
 const READ_RECORD = "read_post_record";
 const READ_TEXT = "read_post_text";
 const PUBLISH = "publish";
 const WRITE_BACK = "write_address";
 const END = "end";
-const CHAIN = [START, READ_RECORD, READ_TEXT, PUBLISH, WRITE_BACK, END];
+const CHAIN = [START, GATHER_REVIEW, REVIEW, READ_RECORD, READ_TEXT, PUBLISH, WRITE_BACK, END];
 
 const POST_TOOL = "linkedin_post_publish";
 
@@ -120,7 +122,7 @@ const publish = steps[PUBLISH];
 // 1. One step posts, and it is reached only through the steps in front of it
 // ---------------------------------------------------------------------------
 
-test("the flow is the one chain of steps this suite names, with no branch and no nested flow (red: a step added or removed, an edge around the publish step, a branching step or a nested flow)", () => {
+test("the flow is the one chain of steps this suite names, with no branch and no nested flow (red: a step added or removed, an edge around the publish step, a branching step, a nested flow or a second waiting step)", () => {
   const nodeIds = (oas.nodes ?? []).map(refOf);
   expect([...nodeIds].sort()).toEqual([...CHAIN].sort());
   expect(Object.keys(steps).sort()).toEqual([...CHAIN].sort());
@@ -128,9 +130,12 @@ test("the flow is the one chain of steps this suite names, with no branch and no
   expect(edges.map((e) => `${e.from}>${e.to}`)).toEqual(CHAIN.slice(1).map((id, i) => `${CHAIN[i]}>${id}`));
   expect(edges.filter((e) => e.branch !== undefined)).toEqual([]);
   const odd = Object.values(steps).filter((c) =>
-    ["BranchingNode", "FlowNode", "Flow", "ParallelFlowNode", "InputMessageNode"].includes(c.component_type),
+    ["BranchingNode", "FlowNode", "Flow", "ParallelFlowNode"].includes(c.component_type),
   );
   expect(odd).toEqual([]);
+  // The one step that waits for a person is the host's review (cinatra-ai/cinatra#4762).
+  const waiting = Object.entries(steps).filter(([, c]) => c.component_type === "InputMessageNode").map(([id]) => id);
+  expect(waiting).toEqual([REVIEW]);
   expect(steps[START].component_type).toBe("StartNode");
   expect(steps[END].component_type).toBe("EndNode");
 });
@@ -157,11 +162,12 @@ test("the steps around the publish step are the host's own reads and the write-b
       .map(([id, c]) => [id, c.data?.tool]),
   );
   expect(tools).toEqual({
+    [GATHER_REVIEW]: "artifacts_get",
     [READ_RECORD]: "artifacts_get",
     [READ_TEXT]: "artifact_content_read",
     [WRITE_BACK]: "objects_update",
   });
-  for (const id of [READ_RECORD, READ_TEXT]) expect(steps[id].metadata.cinatra.riskClass).toBe("read_only");
+  for (const id of [GATHER_REVIEW, READ_RECORD, READ_TEXT]) expect(steps[id].metadata.cinatra.riskClass).toBe("read_only");
 });
 
 // ---------------------------------------------------------------------------

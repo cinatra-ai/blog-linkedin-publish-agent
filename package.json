@@ -90,7 +90,7 @@
     "sourceVersionId": "1cbf4db1-89ee-403b-977c-a7adb5f97b73",
     "sourceVersionNumber": 1,
     "riskLevel": "low",
-    "hasApprovalGates": false,
+    "hasApprovalGates": true,
     "toolAccess": [],
     "ownerOrgId": null,
     "produces": []

@@ -3,7 +3,7 @@
   "component_type": "Flow",
   "id": "blog-linkedin-publish-agent-flow",
   "name": "Blog LinkedIn Publish Agent",
-  "description": "Publishes the LinkedIn post ARTIFACT revision a person continued with to a connected LinkedIn destination, and writes the address back onto that artifact. The flow takes an artifact reference (linkedinArtifactId + linkedinRepresentationRevisionId), never raw text and never a blog record: a deterministic step reads the artifact's record and the pinned revision's words through the host's dependency-scoped artifact reads (artifacts_get + artifact_content_read, admitted by this package's declared @cinatra-ai/linkedin-artifacts edge); the orchestration step is declared as the publishing step, so the run stops in front of it on the host's publish confirmation and nothing goes out before a person releases it; it then posts through the LinkedIn connector (linkedin_post_publish); a second deterministic step merges the address onto the artifact's data through objects_update. The publish returns a receipt, never a new artifact — the LinkedIn writer authors the post, this agent does not.",
+  "description": "Publishes the LinkedIn post ARTIFACT revision a person continued with to a connected LinkedIn destination, and writes the address back onto that artifact. The flow takes an artifact reference (linkedinArtifactId + linkedinRepresentationRevisionId), never raw text and never a blog record: a deterministic step reads the artifact's record and the pinned revision's words through the host's dependency-scoped artifact reads (artifacts_get + artifact_content_read, admitted by this package's declared @cinatra-ai/linkedin-artifacts edge); before anything is read for posting, the run parks on the host's review of exactly that revision (a projection step names it as the review target set and a review step marked with cinatra.artifactReview opens the host's review card), because the host opens a publish card only after an approved review earlier in the same run; the orchestration step is declared as the publishing step, so the run stops in front of it on the host's publish confirmation and nothing goes out before a person releases it; it then posts through the LinkedIn connector (linkedin_post_publish); a second deterministic step merges the address onto the artifact's data through objects_update. The publish returns a receipt, never a new artifact — the LinkedIn writer authors the post, this agent does not.",
   "metadata": {
     "cinatra": {
       "type": "flow",
@@ -100,6 +100,12 @@
       "$component_ref": "start"
     },
     {
+      "$component_ref": "gather_review_target"
+    },
+    {
+      "$component_ref": "post_review_gate"
+    },
+    {
       "$component_ref": "read_post_record"
     },
     {
@@ -118,9 +124,29 @@
   "control_flow_connections": [
     {
       "component_type": "ControlFlowEdge",
-      "name": "start_to_read_post_record",
+      "name": "start_to_gather_review_target",
       "from_node": {
         "$component_ref": "start"
+      },
+      "to_node": {
+        "$component_ref": "gather_review_target"
+      }
+    },
+    {
+      "component_type": "ControlFlowEdge",
+      "name": "gather_review_target_to_post_review_gate",
+      "from_node": {
+        "$component_ref": "gather_review_target"
+      },
+      "to_node": {
+        "$component_ref": "post_review_gate"
+      }
+    },
+    {
+      "component_type": "ControlFlowEdge",
+      "name": "post_review_gate_to_read_post_record",
+      "from_node": {
+        "$component_ref": "post_review_gate"
       },
       "to_node": {
         "$component_ref": "read_post_record"
@@ -168,6 +194,54 @@
     }
   ],
   "data_flow_connections": [
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_linkedinArtifactId_to_gather_review_target_linkedinArtifactId",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "linkedinArtifactId",
+      "destination_node": {
+        "$component_ref": "gather_review_target"
+      },
+      "destination_input": "linkedinArtifactId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_linkedinRepresentationRevisionId_to_gather_review_target_linkedinRepresentationRevisionId",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "linkedinRepresentationRevisionId",
+      "destination_node": {
+        "$component_ref": "gather_review_target"
+      },
+      "destination_input": "linkedinRepresentationRevisionId"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "start_cinatra_run_id_to_gather_review_target_cinatra_run_id",
+      "source_node": {
+        "$component_ref": "start"
+      },
+      "source_output": "cinatra_run_id",
+      "destination_node": {
+        "$component_ref": "gather_review_target"
+      },
+      "destination_input": "cinatra_run_id"
+    },
+    {
+      "component_type": "DataFlowEdge",
+      "name": "gather_review_target_reviewTargets_to_post_review_gate_reviewTargets",
+      "source_node": {
+        "$component_ref": "gather_review_target"
+      },
+      "source_output": "reviewTargets",
+      "destination_node": {
+        "$component_ref": "post_review_gate"
+      },
+      "destination_input": "reviewTargets"
+    },
     {
       "component_type": "DataFlowEdge",
       "name": "start_linkedinArtifactId_to_read_post_record_linkedinArtifactId",
@@ -549,6 +623,94 @@
           "title": "cinatra_run_id",
           "type": "string",
           "default": ""
+        }
+      ]
+    },
+    "gather_review_target": {
+      "component_type": "ApiNode",
+      "id": "gather_review_target",
+      "name": "Gather the review target: the revision this run will publish",
+      "url": "{{CINATRA_BASE_URL}}/api/agents/passthrough",
+      "http_method": "POST",
+      "data": {
+        "tool": "artifacts_get",
+        "input": {
+          "artifactId": "{{ linkedinArtifactId }}",
+          "reviewTargets": "[{\"artifactId\": \"{{ linkedinArtifactId }}\", \"representationRevisionId\": \"{{ linkedinRepresentationRevisionId }}\"}]"
+        },
+        "agent_run_id": "{{ cinatra_run_id }}",
+        "result_input_passthrough": true,
+        "result_id_field": "found"
+      },
+      "inputs": [
+        {
+          "title": "linkedinArtifactId",
+          "type": "string"
+        },
+        {
+          "title": "linkedinRepresentationRevisionId",
+          "type": "string"
+        },
+        {
+          "title": "cinatra_run_id",
+          "type": "string",
+          "default": ""
+        }
+      ],
+      "outputs": [
+        {
+          "title": "reviewTargets",
+          "type": "string",
+          "default": "[]"
+        }
+      ],
+      "metadata": {
+        "cinatra": {
+          "riskClass": "read_only",
+          "requiresApproval": false,
+          "packageName": "@cinatra-ai/blog-linkedin-publish-agent",
+          "description": "The projection step of this run's review. It names the review target set from the SAME two inputs the content read uses (linkedinArtifactId + linkedinRepresentationRevisionId), so the review pins exactly the revision the publishing step later posts. The call is the host's dependency-scoped artifact read (artifacts_get, admitted by the declared @cinatra-ai/linkedin-artifacts edge), so an artifact this run cannot see fails here, before any review opens; the host's passthrough echoes the call's input back (result_input_passthrough), and the set reaches the review step as the input its marker names. It writes nothing."
+        }
+      }
+    },
+    "post_review_gate": {
+      "component_type": "InputMessageNode",
+      "id": "post_review_gate",
+      "name": "Review the LinkedIn post before it is published",
+      "metadata": {
+        "cinatra": {
+          "riskClass": "read_only",
+          "requiresApproval": true,
+          "surfaceGateInputs": true,
+          "inputMessageSchema": {
+            "type": "object",
+            "properties": {
+              "reviewApproval": {
+                "type": "string",
+                "title": "Review note"
+              }
+            },
+            "required": [
+              "reviewApproval"
+            ]
+          },
+          "description": "The review before the publish (cinatra-ai/cinatra#4762, design app-lifecycle-cards section XV: a publish card opens only after an approved review earlier in the same run). The marker below names the input that carries the run's own target set, so the host's review core pins exactly the revision this run publishes and opens the host's review card while the run parks here. The decision is the lifecycle's, not this flow's: this flow owns the pause and ships no screen for it. Deterministic reads stand between this step and the publishing step, so the host's publish confirmation stays the one stop in front of the write.",
+          "artifactReview": {
+            "targetsInput": "reviewTargets"
+          }
+        }
+      },
+      "inputs": [
+        {
+          "title": "reviewTargets",
+          "type": "string",
+          "default": "[]"
+        }
+      ],
+      "outputs": [
+        {
+          "title": "reviewApproval",
+          "type": "string"
         }
       ]
     },
