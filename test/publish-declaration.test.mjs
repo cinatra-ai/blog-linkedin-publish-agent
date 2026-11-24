@@ -17,13 +17,13 @@
 //     no `requiresApproval` other than false).
 //
 // So the prompt-level confirmation and its screen are gone: the host's card is
-// the one stop. The package keeps declaring the former screen's id, without a
-// component, only for a run that paused there before this version (the last
-// case below). The step's prompt runs only after the person approved on that
+// the one stop. The package no longer declares the former screen's id either
+// (see "Retired screen id" above the case that checks no field renderer is
+// declared). The step's prompt runs only after the person approved on that
 // card, so every branch of it returns `approved: true`; a failure shows in the
 // other outputs.
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vitest";
@@ -159,11 +159,40 @@ test("the pack keeps no confirm step of its own in front of the publish", () => 
   expect(system).not.toMatch(/HITL Gate/);
 });
 
+// Retired screen id: `@cinatra-ai/blog-linkedin-publish-agent:draft-review`.
+//
+// This package no longer declares its former screen, and the declaration is not
+// kept as a component-less entry. The application forbids product code from
+// naming a publish package's screen kind (its test is
+// `src/lib/__tests__/publish-pack-names-border.test.ts` in cinatra-ai/cinatra),
+// and its manifest generator rejects a `cinatra.fieldRenderers` declaration
+// whose kind the application does not know. So a package that declares
+// `publishes: true` cannot keep a component-less declaration of its former
+// screen.
+//
+// Recognising a stored step whose renderer id no binding declares any more is
+// the application's job, not the package's. The application's change
+// `resolveHitlGateRenderer` (packages/agents/src/orchestrator-mid-run-hitl.ts
+// in cinatra-ai/cinatra, branch fix/unregistered-renderer-falls-to-floor) draws
+// such a step with the application's own schema form and one Continue, on the
+// run panel, the stepper and the standalone card. That change merges before the
+// application pins this package version.
+//
+// Until then, a run parked at the former screen before this version shows "no
+// renderer configured" in the application. That state already exists on the
+// application's main for every retired id, and this package cannot change it.
 test("the pack declares no field renderer and ships no screen", () => {
   expect(has(manifest.cinatra, "fieldRenderers"), "no field renderer is declared").toBe(false);
   const renderers = fileURLToPath(new URL("../src/renderers", import.meta.url));
   expect(existsSync(renderers), "the package ships no screen source").toBe(false);
   expect(JSON.stringify(oas), "no step of the flow names a renderer").not.toMatch(/x-renderer/);
+  const RETIRED_SCREEN_ID = "@cinatra-ai/blog-linkedin-publish-agent:draft-review";
+  for (const file of ["../package.json", "../cinatra/oas.json"]) {
+    expect(
+      readFileSync(new URL(file, import.meta.url), "utf8"),
+      `the retired screen id is not declared in ${file}`,
+    ).not.toContain(RETIRED_SCREEN_ID);
+  }
 });
 
 // The branches of the step's prompt that run after the card. The person
