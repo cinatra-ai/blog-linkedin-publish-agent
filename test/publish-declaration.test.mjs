@@ -17,13 +17,13 @@
 //     no `requiresApproval` other than false).
 //
 // So the prompt-level confirmation and its screen are gone: the host's card is
-// the one stop. The package keeps declaring the former screen's id, without a
-// component, only for a run that paused there before this version (the last
-// case below). The step's prompt runs only after the person approved on that
+// the one stop. The package no longer declares the former screen's id either
+// (see "Retired screen id" above the case that checks no field renderer is
+// declared). The step's prompt runs only after the person approved on that
 // card, so every branch of it returns `approved: true`; a failure shows in the
 // other outputs.
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vitest";
@@ -157,16 +157,46 @@ test("the pack keeps no confirm step of its own in front of the publish", () => 
   expect(system, "the recipe pauses at no screen of its own").not.toMatch(/INTERRUPT/);
   expect(system).not.toMatch(/x-renderer/);
   expect(system).not.toMatch(/HITL Gate/);
-  expect(system).not.toContain(":draft-review");
 });
 
-test("the confirmation screen is gone from the package", () => {
-  expect(
-    (manifest.cinatra.fieldRenderers ?? []).filter((r) => has(r, "component")),
-    "no declared renderer ships a component",
-  ).toEqual([]);
-  const renderer = fileURLToPath(new URL("../src/renderers/draft-review.tsx", import.meta.url));
-  expect(existsSync(renderer), "the screen's source is deleted").toBe(false);
+// Retired screen id: `@cinatra-ai/blog-linkedin-publish-agent:draft-review`.
+//
+// This package no longer declares its former screen, and the declaration is not
+// kept as a component-less entry. The application forbids product code from
+// naming a publish package's screen kind (its test is
+// `src/lib/__tests__/publish-pack-names-border.test.ts` in cinatra-ai/cinatra),
+// and its manifest generator rejects a `cinatra.fieldRenderers` declaration
+// whose kind the application does not know. So a package that declares
+// `publishes: true` cannot keep a component-less declaration of its former
+// screen.
+//
+// Recognising a stored step whose renderer id no binding declares any more is
+// the application's job, not the package's. The application's change
+// `resolveHitlGateRenderer` (packages/agents/src/orchestrator-mid-run-hitl.ts
+// in cinatra-ai/cinatra, branch fix/unregistered-renderer-falls-to-floor) draws
+// such a step with the application's own schema form and one Continue, on the
+// run panel, the stepper and the standalone card.
+//
+// The order (that application change first, this package version second) is
+// held by the application's own pin, not by this package. A package manifest
+// has one field the application enforces against itself, `cinatra.sdkAbiRange`,
+// and it is keyed to the extension SDK's ABI version, which that change does
+// not alter; the bundled loader also checks it only for a package with a server
+// entry, and this package has none. So the application takes this version into
+// `cinatra.extensions` and its lock only in a pull request opened after that
+// change is on its main.
+test("the pack declares no field renderer and ships no screen", () => {
+  expect(has(manifest.cinatra, "fieldRenderers"), "no field renderer is declared").toBe(false);
+  const renderers = fileURLToPath(new URL("../src/renderers", import.meta.url));
+  expect(existsSync(renderers), "the package ships no screen source").toBe(false);
+  expect(JSON.stringify(oas), "no step of the flow names a renderer").not.toMatch(/x-renderer/);
+  const RETIRED_SCREEN_ID = "@cinatra-ai/blog-linkedin-publish-agent:draft-review";
+  for (const file of ["../package.json", "../cinatra/oas.json"]) {
+    expect(
+      readFileSync(new URL(file, import.meta.url), "utf8"),
+      `the retired screen id is not declared in ${file}`,
+    ).not.toContain(RETIRED_SCREEN_ID);
+  }
 });
 
 // The branches of the step's prompt that run after the card. The person
@@ -204,23 +234,208 @@ test("the published branch returns approved: true after the card approved", () =
   expect(text, "the prompt has one return section").not.toBeNull();
   expect(
     approvedValues(text),
-    "the published branch returns approved: true after the card approved",
-  ).toEqual(["true"]);
+    "every envelope of the return step carries approved: true after the card approved",
+  ).toEqual(["true", "true", "true"]);
 });
 
-// A run that paused at the former draft-review screen before this version keeps
-// that screen's id in its stored question. The package keeps declaring the id,
-// with no component, so the application still reads that question as a step in
-// the middle of the run and draws its own schema form with Continue for it. The
-// flow never asks with the id: nothing in it names the screen.
-test("the former screen id stays declared, without a component, for a run paused before this version", () => {
-  expect(manifest.cinatra.fieldRenderers).toEqual([
+test("every failure branch returns the failure envelope of the return step", () => {
+  for (const pattern of [/When `truncated` is true/, /If the call throws/]) {
+    const text = section(pattern);
+    expect(text).toMatch(/return the failure envelope of Step 3/);
+    expect(text, "no failure branch asks for an empty object as the patch").not.toMatch(
+      /addressPatch: \{\}/,
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Every envelope the step documents is a valid answer under its declared outputs.
+// The runtime asks the model for a strict structured output: every declared
+// output and every declared member of addressPatch must appear, and no other
+// key may (docker/wayflow/agent_loader.py in cinatra, _strict_declared_subschema).
+// The checks below read the envelopes from the JSON blocks of the return step
+// and validate them against that contract, structurally.
+// ---------------------------------------------------------------------------
+
+const PRIMITIVE = { string: "string", boolean: "boolean", integer: "number", number: "number" };
+
+/** Every reason `value` is not a valid answer for the declared subschema at `path`. */
+const strictViolations = (schema, value, path) => {
+  const type = schema.json_schema?.type ?? schema.type;
+  if (type === "object") {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return [`${path} is not an object`];
+    }
+    const members = schema.json_schema?.properties ?? schema.properties ?? {};
+    const problems = [];
+    for (const name of Object.keys(members)) {
+      if (!has(value, name)) problems.push(`${path}.${name} is missing`);
+      else problems.push(...strictViolations(members[name], value[name], `${path}.${name}`));
+    }
+    for (const name of Object.keys(value)) {
+      if (!has(members, name)) problems.push(`${path}.${name} is not declared`);
+    }
+    return problems;
+  }
+  return typeof value === PRIMITIVE[type] ? [] : [`${path} is not a ${type}`];
+};
+
+/** The answer as the declared outputs of the step read it. */
+const answerViolations = (answer) =>
+  strictViolations(
+    { type: "object", properties: Object.fromEntries(node("publish").outputs.map((o) => [o.title, o])) },
+    answer,
+    "answer",
+  );
+
+/** The JSON blocks of the return step, parsed. */
+const returnEnvelopes = () =>
+  [...section(/^### Step \d+ \u2014 return/m).matchAll(/```json\n([\s\S]*?)\n```/g)].map((m) =>
+    JSON.parse(m[1]),
+  );
+
+/** The documented envelopes by name, in the order the return step lists them. */
+const envelope = (name) => {
+  const [published, partial, failure] = returnEnvelopes();
+  return { published, partial, failure }[name];
+};
+
+/** The members of the declared address patch. */
+const patchMembers = () =>
+  Object.keys(node("publish").outputs.find((o) => o.title === "addressPatch").json_schema.properties);
+
+test("the return step documents a published, a partial and a failure envelope", () => {
+  expect(returnEnvelopes().map((e) => e.addressWritten)).toEqual([true, false, false]);
+});
+
+test("every documented envelope is a valid answer under the declared outputs", () => {
+  for (const envelope of returnEnvelopes()) {
+    expect(answerViolations(envelope)).toEqual([]);
+  }
+});
+
+test("the failure envelope publishes nothing and gives the write step nothing to write", () => {
+  const failure = envelope("failure");
+  expect(failure.approved).toBe(true);
+  expect(failure.linkedinPostUrl).toBe("");
+  expect(failure.linkedinPostExternalId).toBe("");
+  expect(Object.keys(failure.addressPatch)).toEqual(patchMembers());
+  expect(Object.values(failure.addressPatch).every((v) => v === "")).toBe(true);
+});
+
+test("the return step chooses the envelope by one rule, and only it sets addressWritten", () => {
+  const text = section(/^### Step \d+ — return/m);
+  expect(text).toMatch(/Choose the envelope by one rule, from what LinkedIn returned:/);
+  expect(text).toMatch(/- Complete: all three members of the patch are non-empty strings[^\n]*Return the published envelope\./);
+  expect(text).toMatch(/- Partial: LinkedIn returned the post's address or its id, but not both\. Return the partial envelope\./);
+  expect(text).toMatch(/- Nothing: LinkedIn returned neither value[^\n]*Return the failure envelope\./);
+  const system = node("publish").data.system;
+  const outside = system.replace(text, "");
+  expect(
+    [...outside.matchAll(/addressWritten/g)].length,
+    "outside the return step, addressWritten is only named in the list of answer keys",
+  ).toBe(1);
+  expect(outside, "no other step chooses an envelope by the address alone").not.toMatch(
+    /returned the post's address, return/,
+  );
+});
+
+// The leaf's write condition, as the leaf states it: each named member is
+// present and non-empty.
+const leafRenders = (patch) => {
+  const leaf = node("write_address").data.input.data;
+  const cond = leaf.match(/\{% if ([^%]*) %\}/)[1];
+  const names = [...cond.matchAll(/\('([^']+)' in addressPatch and addressPatch\['\1'\]\)/g)].map(
+    (m) => m[1],
+  );
+  expect(names).toEqual(patchMembers());
+  return names.every((n) => has(patch, n) && patch[n] !== "") ? JSON.stringify(patch) : "{}";
+};
+
+// A partial result: LinkedIn returned one receipt value but not the other. The
+// answer keeps that value at the top level, so the run can tell an existing
+// post from no publish, and the patch stays empty, so nothing is written.
+const partialAnswers = () => {
+  const partial = envelope("partial");
+  const base = {
+    ...partial,
+    linkedinArtifactId: "art-1",
+    linkedinRepresentationRevisionId: "rev-1",
+  };
+  return [
     {
-      id: "@cinatra-ai/blog-linkedin-publish-agent:draft-review",
-      kind: "linkedin-draft-review",
-      priority: 90,
-      midRunHitl: true,
+      ...base,
+      linkedinPostUrl: "https://www.linkedin.com/feed/update/x",
+      linkedinPostExternalId: "",
+      summary: "Posted at https://www.linkedin.com/feed/update/x but LinkedIn returned no id.",
     },
-  ]);
-  expect(JSON.stringify(oas), "the flow never names the former screen").not.toContain(":draft-review");
+    {
+      ...base,
+      linkedinPostUrl: "",
+      linkedinPostExternalId: "urn:li:share:1",
+      summary: "Posted as urn:li:share:1 but LinkedIn returned no address.",
+    },
+  ];
+};
+
+test("the partial envelope keeps the returned receipt at the top level and an empty patch", () => {
+  const partial = envelope("partial");
+  expect(partial.approved).toBe(true);
+  expect(partial.addressWritten).toBe(false);
+  expect(Object.keys(partial.addressPatch)).toEqual(patchMembers());
+  expect(Object.values(partial.addressPatch).every((v) => v === "")).toBe(true);
+  expect(partial.linkedinPostUrl, "the top-level address is what LinkedIn returned").not.toBe("");
+  expect(partial.linkedinPostExternalId, "the top-level id is what LinkedIn returned").not.toBe("");
+  for (const answer of partialAnswers()) {
+    expect(answerViolations(answer)).toEqual([]);
+    expect(answer.addressWritten).toBe(false);
+    expect(Object.values(answer.addressPatch).every((v) => v === "")).toBe(true);
+  }
+});
+
+test("a partial result is distinguishable from no publish by its top-level receipt", () => {
+  const failure = envelope("failure");
+  const noPublish = (a) => a.linkedinPostUrl === "" && a.linkedinPostExternalId === "";
+  expect(noPublish(failure), "the failure envelope has no receipt").toBe(true);
+  for (const answer of partialAnswers()) {
+    expect(noPublish(answer), "a partial answer carries the receipt LinkedIn returned").toBe(false);
+  }
+});
+
+test("the write leaf renders {} for a partial result", () => {
+  for (const answer of partialAnswers()) {
+    expect(leafRenders(answer.addressPatch)).toBe("{}");
+  }
+  // Even a half-filled patch the model should not build writes nothing.
+  expect(
+    leafRenders({
+      linkedinPublishedUrl: "https://www.linkedin.com/feed/update/x",
+      linkedinPublishedExternalId: "",
+      linkedinPublishedRevisionId: "rev-1",
+    }),
+  ).toBe("{}");
+});
+
+test("the published envelope fills every member of the patch", () => {
+  const published = envelope("published");
+  expect(Object.keys(published.addressPatch)).toEqual(patchMembers());
+  expect(Object.values(published.addressPatch).every((v) => v !== "")).toBe(true);
+});
+
+test("the strict check refuses the empty object as an address patch", () => {
+  const failure = envelope("failure");
+  expect(answerViolations({ ...failure, addressPatch: {} })).toEqual(
+    patchMembers().map((name) => `answer.addressPatch.${name} is missing`),
+  );
+});
+
+test("the write step writes the patch only when every declared member is non-empty", () => {
+  const leaf = node("write_address").data.input.data;
+  const gate = leaf.match(/\{% if ([^%]*) %\}\{\{ addressPatch \| tojson \}\}\{% else %\}\{\}\{% endif %\}/);
+  expect(gate, "the leaf renders the patch under one condition, else {}").not.toBeNull();
+  expect(gate[1], "the condition asks each declared member to be present and non-empty").toBe(
+    patchMembers()
+      .map((name) => `('${name}' in addressPatch and addressPatch['${name}'])`)
+      .join(" and "),
+  );
 });

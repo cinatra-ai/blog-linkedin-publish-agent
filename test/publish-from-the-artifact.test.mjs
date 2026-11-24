@@ -123,11 +123,12 @@ test("the address is written back onto the SAME artifact, through the host's wri
   ).toBe("{{ linkedinArtifactId }}");
   // The patch reaches the artifact. The pinned runtime renders every leaf of an
   // ApiNode's data as a string, so the leaf carries the patch as JSON text
-  // encoding an object (`{}` when nothing was published), which the host's
-  // objects_update seam parses; the hint keeps addressPatch visible to the
-  // runtime's placeholder inference.
+  // encoding an object, which the host's objects_update seam parses. The leaf
+  // writes the patch only when every address member is present and non-empty,
+  // and `{}` otherwise; the hint keeps addressPatch visible to the runtime's
+  // placeholder inference.
   expect(write.data.input.data).toBe(
-    "{# pyagentspec-input-hint: {{ addressPatch }} #}{{ addressPatch | tojson }}",
+    "{# pyagentspec-input-hint: {{ addressPatch }} #}{% if ('linkedinPublishedUrl' in addressPatch and addressPatch['linkedinPublishedUrl']) and ('linkedinPublishedExternalId' in addressPatch and addressPatch['linkedinPublishedExternalId']) and ('linkedinPublishedRevisionId' in addressPatch and addressPatch['linkedinPublishedRevisionId']) %}{{ addressPatch | tojson }}{% else %}{}{% endif %}",
   );
   expect(
     write.metadata.cinatra.riskClass,
@@ -151,13 +152,28 @@ function tojsonText(value) {
     .replaceAll("'", "\\u0027");
 }
 
-// The leaf's text with its comments removed must be exactly one tojson
-// expression; anything else is not JSON text and is refused here.
+// The leaf's text with its comments removed must be one tojson expression,
+// optionally under one condition whose terms each ask one member of that
+// value to be present and non-empty, with `{}` in the else branch; anything
+// else is not JSON text and is refused here.
 function renderLeaf(text, values) {
   const body = text.replace(/\{#[\s\S]*?#\}/g, "");
-  const m = /^\{\{\s*(\w+)\s*\|\s*tojson\s*\}\}$/.exec(body);
+  const gated =
+    /^\{% if ([^%]*) %\}(\{\{[^}]*\}\})\{% else %\}\{\}\{% endif %\}$/.exec(body);
+  const expression = gated ? gated[2] : body;
+  const m = /^\{\{\s*(\w+)\s*\|\s*tojson\s*\}\}$/.exec(expression);
   if (!m) throw new Error(`the write-back leaf is not one tojson expression: ${body}`);
-  return tojsonText(values[m[1]]);
+  const value = values[m[1]];
+  if (gated) {
+    for (const term of gated[1].split(" and (")) {
+      const t = /^\(?'(\w+)' in (\w+) and (\w+)\['(\w+)'\]\)$/.exec(term);
+      if (!t || t[2] !== m[1] || t[3] !== m[1] || t[4] !== t[1]) {
+        throw new Error(`the write-back condition has a term it cannot read: ${term}`);
+      }
+      if (!(t[1] in value) || !value[t[1]]) return "{}";
+    }
+  }
+  return tojsonText(value);
 }
 
 test("the write-back leaf renders the patch as JSON text of exactly its three declared members", () => {
@@ -180,6 +196,17 @@ test("the write-back leaf renders the patch as JSON text of exactly its three de
     JSON.parse(renderLeaf(leaf, { addressPatch: {} })),
     "nothing published is the empty record, which merges nothing",
   ).toEqual({});
+  const emptyPatch = Object.fromEntries(declared.map((k) => [k, ""]));
+  expect(
+    JSON.parse(renderLeaf(leaf, { addressPatch: emptyPatch })),
+    "the empty patch of a run that published nothing renders the empty record",
+  ).toEqual({});
+  for (const key of declared) {
+    expect(
+      JSON.parse(renderLeaf(leaf, { addressPatch: { ...patch, [key]: "" } })),
+      `a patch with ${key} empty renders the empty record, never a half address`,
+    ).toEqual({});
+  }
 });
 
 test("the address never travels a side channel", () => {
@@ -230,7 +257,7 @@ test("nothing published means nothing written", () => {
   expect(
     bridgeNode().data.system,
     "the recipe states the empty patch, so no empty address is ever merged",
-  ).toMatch(/`addressPatch` is `\{\}` exactly/);
+  ).toMatch(/The empty patch is the same three keys, each the empty string/);
 });
 
 // ---------------------------------------------------------------------------

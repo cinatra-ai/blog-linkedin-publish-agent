@@ -76,14 +76,6 @@
         "requirement": "required"
       }
     ],
-    "fieldRenderers": [
-      {
-        "id": "@cinatra-ai/blog-linkedin-publish-agent:draft-review",
-        "kind": "linkedin-draft-review",
-        "priority": 90,
-        "midRunHitl": true
-      }
-    ],
     "packageType": "agent",
     "manifestVersion": 1,
     "sourceTemplateId": "blog-linkedin-publish-agent-flow",
