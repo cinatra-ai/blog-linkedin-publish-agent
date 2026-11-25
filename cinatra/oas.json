@@ -3,7 +3,7 @@
   "component_type": "Flow",
   "id": "blog-linkedin-publish-agent-flow",
   "name": "Blog LinkedIn Publish Agent",
-  "description": "Publishes the LinkedIn post ARTIFACT revision a person continued with to a connected LinkedIn destination, and writes the address back onto that artifact. The flow takes an artifact reference (linkedinArtifactId + linkedinRepresentationRevisionId), never raw text and never a blog record: a deterministic step reads the artifact's record and the pinned revision's words through the host's dependency-scoped artifact reads (artifacts_get + artifact_content_read, admitted by this package's declared @cinatra-ai/linkedin-artifacts edge); before anything is read for posting, the run parks on the host's review of exactly that revision (a projection step names it as the review target set and a review step marked with cinatra.artifactReview opens the host's review card), because the host opens a publish card only after an approved review earlier in the same run; the orchestration step is declared as the publishing step, so the run stops in front of it on the host's publish confirmation and nothing goes out before a person releases it; it then posts through the LinkedIn connector (linkedin_post_publish); a second deterministic step merges the address onto the artifact's data through objects_update. The publish returns a receipt, never a new artifact — the LinkedIn writer authors the post, this agent does not.",
+  "description": "Publishes the LinkedIn post ARTIFACT revision a person continued with to a connected LinkedIn destination, and writes the address back onto that artifact. The flow takes an artifact reference (linkedinArtifactId + linkedinRepresentationRevisionId), never raw text and never a blog record: a deterministic step reads the artifact's record and a step reads the approved revision's words through the host's dependency-scoped artifact reads (artifacts_get + artifact_content_read, the latter through the tool this package declares, admitted by this package's declared @cinatra-ai/linkedin-artifacts edge); before anything is read for posting, the run parks on the host's review of exactly that revision (a projection step names it as the review target set and a review step marked with cinatra.artifactReview opens the host's review card), because the host opens a publish card only after an approved review earlier in the same run; the review's answer names the revision the person approved (that revision, or the successor a Regenerate made), and the read of the copy, the publish card and the post take that revision from the answer, never the revision the run started with; an answer that names no approved revision stops the run before the read; the orchestration step is declared as the publishing step, so the run stops in front of it on the host's publish confirmation and nothing goes out before a person releases it; it then posts through the LinkedIn connector (linkedin_post_publish); a second deterministic step merges the address onto the artifact's data through objects_update. The publish returns a receipt, never a new artifact — the LinkedIn writer authors the post, this agent does not.",
   "metadata": {
     "cinatra": {
       "type": "flow",
@@ -280,15 +280,15 @@
     },
     {
       "component_type": "DataFlowEdge",
-      "name": "start_linkedinRepresentationRevisionId_to_read_post_text_linkedinRepresentationRevisionId",
+      "name": "post_review_gate_reviewApproval_to_read_post_text_reviewApproval",
       "source_node": {
-        "$component_ref": "start"
+        "$component_ref": "post_review_gate"
       },
-      "source_output": "linkedinRepresentationRevisionId",
+      "source_output": "reviewApproval",
       "destination_node": {
         "$component_ref": "read_post_text"
       },
-      "destination_input": "linkedinRepresentationRevisionId"
+      "destination_input": "reviewApproval"
     },
     {
       "component_type": "DataFlowEdge",
@@ -304,11 +304,11 @@
     },
     {
       "component_type": "DataFlowEdge",
-      "name": "start_linkedinArtifactId_to_publish_linkedinArtifactId",
+      "name": "read_post_text_artifactId_to_publish_linkedinArtifactId",
       "source_node": {
-        "$component_ref": "start"
+        "$component_ref": "read_post_text"
       },
-      "source_output": "linkedinArtifactId",
+      "source_output": "artifactId",
       "destination_node": {
         "$component_ref": "publish"
       },
@@ -316,11 +316,11 @@
     },
     {
       "component_type": "DataFlowEdge",
-      "name": "start_linkedinRepresentationRevisionId_to_publish_linkedinRepresentationRevisionId",
+      "name": "read_post_text_representationRevisionId_to_publish_linkedinRepresentationRevisionId",
       "source_node": {
-        "$component_ref": "start"
+        "$component_ref": "read_post_text"
       },
-      "source_output": "linkedinRepresentationRevisionId",
+      "source_output": "representationRevisionId",
       "destination_node": {
         "$component_ref": "publish"
       },
@@ -436,11 +436,11 @@
     },
     {
       "component_type": "DataFlowEdge",
-      "name": "start_linkedinArtifactId_to_write_address_linkedinArtifactId",
+      "name": "read_post_text_artifactId_to_write_address_linkedinArtifactId",
       "source_node": {
-        "$component_ref": "start"
+        "$component_ref": "read_post_text"
       },
-      "source_output": "linkedinArtifactId",
+      "source_output": "artifactId",
       "destination_node": {
         "$component_ref": "write_address"
       },
@@ -669,7 +669,7 @@
           "riskClass": "read_only",
           "requiresApproval": false,
           "packageName": "@cinatra-ai/blog-linkedin-publish-agent",
-          "description": "The projection step of this run's review. It names the review target set from the SAME two inputs the content read uses (linkedinArtifactId + linkedinRepresentationRevisionId), so the review pins exactly the revision the publishing step later posts. The call is the host's dependency-scoped artifact read (artifacts_get, admitted by the declared @cinatra-ai/linkedin-artifacts edge), so an artifact this run cannot see fails here, before any review opens; the host's passthrough echoes the call's input back (result_input_passthrough), and the set reaches the review step as the input its marker names. It writes nothing."
+          "description": "The projection step of this run's review. It names the review target set from the two start inputs (linkedinArtifactId + linkedinRepresentationRevisionId), so the review pins exactly the revision the person continued with; the publishing step later posts the revision the review's answer approves. The call is the host's dependency-scoped artifact read (artifacts_get, admitted by the declared @cinatra-ai/linkedin-artifacts edge), so an artifact this run cannot see fails here, before any review opens; the host's passthrough echoes the call's input back (result_input_passthrough), and the set reaches the review step as the input its marker names. It writes nothing."
         }
       }
     },
@@ -694,7 +694,7 @@
               "reviewApproval"
             ]
           },
-          "description": "The review before the publish (cinatra-ai/cinatra#4762, design app-lifecycle-cards section XV: a publish card opens only after an approved review earlier in the same run). The marker below names the input that carries the run's own target set, so the host's review core pins exactly the revision this run publishes and opens the host's review card while the run parks here. The decision is the lifecycle's, not this flow's: this flow owns the pause and ships no screen for it. Deterministic reads stand between this step and the publishing step, so the host's publish confirmation stays the one stop in front of the write.",
+          "description": "The review before the publish (cinatra-ai/cinatra#4762, design app-lifecycle-cards section XV: a publish card opens only after an approved review earlier in the same run). The marker below names the input that carries the run's own target set, so the host's review core pins exactly the revision the person continued with and opens the host's review card while the run parks here. Its answer (reviewApproval) names the revision the person approved: that revision, or the successor a Regenerate made. The read of the copy takes the approved revision from that answer, so the publish card and the publishing step show and post the approved revision, never the one the run started with. The decision is the lifecycle's, not this flow's: this flow owns the pause and ships no screen for it. Deterministic reads stand between this step and the publishing step, so the host's publish confirmation stays the one stop in front of the write.",
           "artifactReview": {
             "targetsInput": "reviewTargets"
           }
@@ -756,24 +756,28 @@
     "read_post_text": {
       "component_type": "ApiNode",
       "id": "read_post_text",
-      "name": "Read the revision the person continued with",
+      "name": "Read the revision the review approved",
       "url": "{{CINATRA_BASE_URL}}/api/agents/passthrough",
       "http_method": "POST",
       "data": {
-        "tool": "artifact_content_read",
+        "tool": "extension_tool",
         "input": {
-          "artifactId": "{{ linkedinArtifactId }}",
-          "representationRevisionId": "{{ linkedinRepresentationRevisionId }}"
+          "name": "approved_post_text",
+          "input": {
+            "reviewDecision": "{{ reviewApproval }}",
+            "artifactId": "{{ linkedinArtifactId }}"
+          }
         },
         "agent_run_id": "{{ cinatra_run_id }}"
       },
       "inputs": [
         {
-          "title": "linkedinArtifactId",
-          "type": "string"
+          "title": "reviewApproval",
+          "type": "string",
+          "default": ""
         },
         {
-          "title": "linkedinRepresentationRevisionId",
+          "title": "linkedinArtifactId",
           "type": "string"
         },
         {
@@ -784,7 +788,7 @@
       ],
       "outputs": [
         {
-          "title": "text",
+          "title": "artifactId",
           "type": "string"
         },
         {
@@ -792,7 +796,7 @@
           "type": "string"
         },
         {
-          "title": "mime",
+          "title": "text",
           "type": "string"
         },
         {
@@ -805,7 +809,7 @@
           "riskClass": "read_only",
           "requiresApproval": false,
           "packageName": "@cinatra-ai/blog-linkedin-publish-agent",
-          "description": "Deterministic dependency-scoped content read of the PINNED representation revision — the copy the person continued with, and the only copy this agent posts. The revision id is an input, never the latest revision, so an edit made after the person continued is not what goes out."
+          "description": "Reads the copy of the revision the review APPROVED, through the tool this pack declares (approved_post_text). The review step resumes with the host's answer as JSON text (reviewApproval), and a flow cannot parse it, so the module takes the approved target from that answer: the revision the person continued with, or the successor a Regenerate made and the person then approved. It reads that revision's copy through the content read the host binds to this run, admitted by this package's declared @cinatra-ai/linkedin-artifacts edge, and hands on the approved artifact, the approved revision and its copy, the only copy this agent posts. The revision is the one the answer names, never the latest revision and never the revision the run started with. An answer that names no approved revision (a rejection, a malformed answer, no target or more than one, an artifact other than the one under review) stops the run here with a sentence that says why, before any read, so no publish card opens and nothing goes out."
         }
       }
     },
@@ -817,7 +821,7 @@
       "http_method": "POST",
       "data": {
         "agent_id": "blog-linkedin-publish-agent",
-        "system": "You are a blog-LinkedIn-publish orchestrator. Follow the instructions below step-by-step. Return a single JSON object with {linkedinArtifactId, linkedinRepresentationRevisionId, linkedinPostUrl, linkedinPostExternalId, addressPatch, addressWritten, approved, summary} — nothing else.\n\n# Blog LinkedIn Publish Agent\n\nYou publish ONE LinkedIn post-draft artifact revision to a connected LinkedIn destination and hand the address back so the deterministic step behind you can write it onto the artifact.\n\n## What you are given\n\n- `linkedinArtifactId: string` — the LinkedIn post-draft artifact (`@cinatra-ai/linkedin:post-draft`), written by the LinkedIn writer, not by you.\n- `linkedinRepresentationRevisionId: string` — THE REVISION THE PERSON CONTINUED WITH. It is pinned; nothing later is published.\n- `postText: string` — the words of exactly that revision, already read for you by the deterministic step in front of you (the host's dependency-scoped artifact content read). This is the ONLY copy you post.\n- `postArtifact: object` — that artifact's own record (`title`, `mime`, timestamps). It is the artifact's CURRENT record, not the pinned revision, so nothing you post comes from it.\n- `truncated: boolean` — whether the pinned read came back cut short. See Step 0.\n- `linkedinAccountId`, `destinationType` (`member` or `organization`), `destinationId`, `destinationName`, `linkedinAccountName` — where it goes.\n- `blogPostUrl: string` — the blog post's address, filled in at the publishing step from the WordPress publisher's own output, never guessed at the start. It may be empty when the post has no address yet.\n\nYOU DO NOT WRITE. You do not draft, re-word, extend, shorten or re-generate the copy, and you do not author or emit any artifact: the writer made the post, the person continued with a revision of it, and that revision is what goes out. A person who wants different words changes them on the review, not here.\n\n## Tool discipline\n\nYou may call exactly this 1 primitive:\n\n- `linkedin_post_publish({ accountId, destinationType, destinationId, content })` — post to the connected destination. `content` is `postText`, with `blogPostUrl` appended on its own last line when `blogPostUrl` is non-empty AND `postText` does not already contain it.\n\nCall NOTHING else. You never read or write an artifact yourself — the steps around you do that through the host's own primitives — and you never reach a blog record.\n\n## Step-by-step recipe\n\n### Step 0 — the pinned words must be whole\n\nWhen `truncated` is true the read came back cut short, so what you hold is NOT the whole pinned revision. Post nothing, ask nothing, and return the failure envelope of Step 3 (`approved: true`) with a `summary` naming the truncation — the person already approved this publish on the application's card; the read is what failed. Never post a cut-short copy, and never call it the pinned revision.\n\n### Step 1 — post it\n\n```\nlinkedin_post_publish({\n  accountId: <linkedinAccountId>,\n  destinationType: <destinationType>,\n  destinationId: <destinationId>,\n  content: <the content you assembled>,\n})\n```\n\nFrom the result read the post's address → `linkedinPostUrl`, and the platform's own id for it (its URN) → `linkedinPostExternalId`.\n\nIf the call throws, return the failure envelope of Step 3 (`approved: true`) with a summary naming the failure — a person released the publish before this step ran; the call is what failed.\n\n### Step 2 — build the write-back patch\n\nThe deterministic step behind you merges `addressPatch` onto the LinkedIn artifact's own data through the host's write-back primitive. Build it with EXACTLY these three keys and no others:\n\n```json\n{\n  \"linkedinPublishedUrl\": \"<linkedinPostUrl>\",\n  \"linkedinPublishedExternalId\": \"<linkedinPostExternalId>\",\n  \"linkedinPublishedRevisionId\": \"<linkedinRepresentationRevisionId>\"\n}\n```\n\nNever guess an address, and never put one in the patch that LinkedIn did not return. The patch's key space is CLOSED: those three keys and nothing else may ever appear in it. Never add a key of your own, and never a field of the artifact itself (`title`, `mime`, `content` or any other) — the step behind you merges the patch straight onto the artifact's own data, so a key you invent is written onto the artifact. The step behind you writes the patch only when all three values are non-empty; Step 3 says which envelope, and so which patch, you return.\n\n### Step 3 — return\n\nChoose the envelope by one rule, from what LinkedIn returned:\n\n- Complete: all three members of the patch are non-empty strings (LinkedIn returned both the post's address and its own id, and you were given the revision id). Return the published envelope.\n- Partial: LinkedIn returned the post's address or its id, but not both. Return the partial envelope. The post exists, so the top-level `linkedinPostUrl` and `linkedinPostExternalId` carry the value LinkedIn returned, and the value it did not return is `\"\"`; `addressPatch` is the empty patch; `addressWritten` is false; the `summary` names the value LinkedIn returned.\n- Nothing: LinkedIn returned neither value (a cut-short read, a failed call, or a result with no address and no id). Return the failure envelope.\n\nThe empty patch is the same three keys, each the empty string `\"\"`. The step behind you writes nothing for the empty patch, so `addressWritten` is true only for the published envelope. Only the failure envelope has both top-level receipt values empty, so a partial result never reads as a post that does not exist.\n\nThe published envelope:\n\n```json\n{\n  \"linkedinArtifactId\": \"<linkedinArtifactId>\",\n  \"linkedinRepresentationRevisionId\": \"<linkedinRepresentationRevisionId>\",\n  \"linkedinPostUrl\": \"<linkedinPostUrl>\",\n  \"linkedinPostExternalId\": \"<linkedinPostExternalId>\",\n  \"addressPatch\": {\n    \"linkedinPublishedUrl\": \"<linkedinPostUrl>\",\n    \"linkedinPublishedExternalId\": \"<linkedinPostExternalId>\",\n    \"linkedinPublishedRevisionId\": \"<linkedinRepresentationRevisionId>\"\n  },\n  \"addressWritten\": true,\n  \"approved\": true,\n  \"summary\": \"<one-line explanation a person can read>\"\n}\n```\n\nThe partial envelope (each top-level receipt value is what LinkedIn returned, or `\"\"` when it returned none):\n\n```json\n{\n  \"linkedinArtifactId\": \"<linkedinArtifactId>\",\n  \"linkedinRepresentationRevisionId\": \"<linkedinRepresentationRevisionId>\",\n  \"linkedinPostUrl\": \"<linkedinPostUrl if LinkedIn returned it, else empty>\",\n  \"linkedinPostExternalId\": \"<linkedinPostExternalId if LinkedIn returned it, else empty>\",\n  \"addressPatch\": {\n    \"linkedinPublishedUrl\": \"\",\n    \"linkedinPublishedExternalId\": \"\",\n    \"linkedinPublishedRevisionId\": \"\"\n  },\n  \"addressWritten\": false,\n  \"approved\": true,\n  \"summary\": \"<one line naming the address or id LinkedIn returned, and the value it did not>\"\n}\n```\n\nThe failure envelope, with a one-line `summary` that names the cause:\n\n```json\n{\n  \"linkedinArtifactId\": \"<linkedinArtifactId>\",\n  \"linkedinRepresentationRevisionId\": \"<linkedinRepresentationRevisionId>\",\n  \"linkedinPostUrl\": \"\",\n  \"linkedinPostExternalId\": \"\",\n  \"addressPatch\": {\n    \"linkedinPublishedUrl\": \"\",\n    \"linkedinPublishedExternalId\": \"\",\n    \"linkedinPublishedRevisionId\": \"\"\n  },\n  \"addressWritten\": false,\n  \"approved\": true,\n  \"summary\": \"<one-line explanation a person can read>\"\n}\n```\n",
+        "system": "You are a blog-LinkedIn-publish orchestrator. Follow the instructions below step-by-step. Return a single JSON object with {linkedinArtifactId, linkedinRepresentationRevisionId, linkedinPostUrl, linkedinPostExternalId, addressPatch, addressWritten, approved, summary} — nothing else.\n\n# Blog LinkedIn Publish Agent\n\nYou publish ONE LinkedIn post-draft artifact revision to a connected LinkedIn destination and hand the address back so the deterministic step behind you can write it onto the artifact.\n\n## What you are given\n\n- `linkedinArtifactId: string` — the LinkedIn post-draft artifact (`@cinatra-ai/linkedin:post-draft`), written by the LinkedIn writer, not by you.\n- `linkedinRepresentationRevisionId: string` — THE REVISION THE REVIEW APPROVED: the revision the person continued with, or the successor a Regenerate made and the person then approved. It is pinned; nothing later is published.\n- `postText: string` — the words of exactly that revision, already read for you by the deterministic step in front of you (the host's dependency-scoped artifact content read of the revision the review approved). This is the ONLY copy you post.\n- `postArtifact: object` — that artifact's own record (`title`, `mime`, timestamps). It is the artifact's CURRENT record, not the pinned revision, so nothing you post comes from it.\n- `truncated: boolean` — whether the pinned read came back cut short. See Step 0.\n- `linkedinAccountId`, `destinationType` (`member` or `organization`), `destinationId`, `destinationName`, `linkedinAccountName` — where it goes.\n- `blogPostUrl: string` — the blog post's address, filled in at the publishing step from the WordPress publisher's own output, never guessed at the start. It may be empty when the post has no address yet.\n\nYOU DO NOT WRITE. You do not draft, re-word, extend, shorten or re-generate the copy, and you do not author or emit any artifact: the writer made the post, the person continued with a revision of it, and that revision is what goes out. A person who wants different words changes them on the review, not here.\n\n## Tool discipline\n\nYou may call exactly this 1 primitive:\n\n- `linkedin_post_publish({ accountId, destinationType, destinationId, content })` — post to the connected destination. `content` is `postText`, with `blogPostUrl` appended on its own last line when `blogPostUrl` is non-empty AND `postText` does not already contain it.\n\nCall NOTHING else. You never read or write an artifact yourself — the steps around you do that through the host's own primitives — and you never reach a blog record.\n\n## Step-by-step recipe\n\n### Step 0 — the pinned words must be whole\n\nWhen `truncated` is true the read came back cut short, so what you hold is NOT the whole pinned revision. Post nothing, ask nothing, and return the failure envelope of Step 3 (`approved: true`) with a `summary` naming the truncation — the person already approved this publish on the application's card; the read is what failed. Never post a cut-short copy, and never call it the pinned revision.\n\n### Step 1 — post it\n\n```\nlinkedin_post_publish({\n  accountId: <linkedinAccountId>,\n  destinationType: <destinationType>,\n  destinationId: <destinationId>,\n  content: <the content you assembled>,\n})\n```\n\nFrom the result read the post's address → `linkedinPostUrl`, and the platform's own id for it (its URN) → `linkedinPostExternalId`.\n\nIf the call throws, return the failure envelope of Step 3 (`approved: true`) with a summary naming the failure — a person released the publish before this step ran; the call is what failed.\n\n### Step 2 — build the write-back patch\n\nThe deterministic step behind you merges `addressPatch` onto the LinkedIn artifact's own data through the host's write-back primitive. Build it with EXACTLY these three keys and no others:\n\n```json\n{\n  \"linkedinPublishedUrl\": \"<linkedinPostUrl>\",\n  \"linkedinPublishedExternalId\": \"<linkedinPostExternalId>\",\n  \"linkedinPublishedRevisionId\": \"<linkedinRepresentationRevisionId>\"\n}\n```\n\nNever guess an address, and never put one in the patch that LinkedIn did not return. The patch's key space is CLOSED: those three keys and nothing else may ever appear in it. Never add a key of your own, and never a field of the artifact itself (`title`, `mime`, `content` or any other) — the step behind you merges the patch straight onto the artifact's own data, so a key you invent is written onto the artifact. The step behind you writes the patch only when all three values are non-empty; Step 3 says which envelope, and so which patch, you return.\n\n### Step 3 — return\n\nChoose the envelope by one rule, from what LinkedIn returned:\n\n- Complete: all three members of the patch are non-empty strings (LinkedIn returned both the post's address and its own id, and you were given the revision id). Return the published envelope.\n- Partial: LinkedIn returned the post's address or its id, but not both. Return the partial envelope. The post exists, so the top-level `linkedinPostUrl` and `linkedinPostExternalId` carry the value LinkedIn returned, and the value it did not return is `\"\"`; `addressPatch` is the empty patch; `addressWritten` is false; the `summary` names the value LinkedIn returned.\n- Nothing: LinkedIn returned neither value (a cut-short read, a failed call, or a result with no address and no id). Return the failure envelope.\n\nThe empty patch is the same three keys, each the empty string `\"\"`. The step behind you writes nothing for the empty patch, so `addressWritten` is true only for the published envelope. Only the failure envelope has both top-level receipt values empty, so a partial result never reads as a post that does not exist.\n\nThe published envelope:\n\n```json\n{\n  \"linkedinArtifactId\": \"<linkedinArtifactId>\",\n  \"linkedinRepresentationRevisionId\": \"<linkedinRepresentationRevisionId>\",\n  \"linkedinPostUrl\": \"<linkedinPostUrl>\",\n  \"linkedinPostExternalId\": \"<linkedinPostExternalId>\",\n  \"addressPatch\": {\n    \"linkedinPublishedUrl\": \"<linkedinPostUrl>\",\n    \"linkedinPublishedExternalId\": \"<linkedinPostExternalId>\",\n    \"linkedinPublishedRevisionId\": \"<linkedinRepresentationRevisionId>\"\n  },\n  \"addressWritten\": true,\n  \"approved\": true,\n  \"summary\": \"<one-line explanation a person can read>\"\n}\n```\n\nThe partial envelope (each top-level receipt value is what LinkedIn returned, or `\"\"` when it returned none):\n\n```json\n{\n  \"linkedinArtifactId\": \"<linkedinArtifactId>\",\n  \"linkedinRepresentationRevisionId\": \"<linkedinRepresentationRevisionId>\",\n  \"linkedinPostUrl\": \"<linkedinPostUrl if LinkedIn returned it, else empty>\",\n  \"linkedinPostExternalId\": \"<linkedinPostExternalId if LinkedIn returned it, else empty>\",\n  \"addressPatch\": {\n    \"linkedinPublishedUrl\": \"\",\n    \"linkedinPublishedExternalId\": \"\",\n    \"linkedinPublishedRevisionId\": \"\"\n  },\n  \"addressWritten\": false,\n  \"approved\": true,\n  \"summary\": \"<one line naming the address or id LinkedIn returned, and the value it did not>\"\n}\n```\n\nThe failure envelope, with a one-line `summary` that names the cause:\n\n```json\n{\n  \"linkedinArtifactId\": \"<linkedinArtifactId>\",\n  \"linkedinRepresentationRevisionId\": \"<linkedinRepresentationRevisionId>\",\n  \"linkedinPostUrl\": \"\",\n  \"linkedinPostExternalId\": \"\",\n  \"addressPatch\": {\n    \"linkedinPublishedUrl\": \"\",\n    \"linkedinPublishedExternalId\": \"\",\n    \"linkedinPublishedRevisionId\": \"\"\n  },\n  \"addressWritten\": false,\n  \"approved\": true,\n  \"summary\": \"<one-line explanation a person can read>\"\n}\n```\n",
         "user": "{# pyagentspec-input-hint: {{ linkedinArtifactId }} {{ linkedinRepresentationRevisionId }} {{ linkedinAccountId }} {{ linkedinAccountName }} {{ destinationType }} {{ destinationId }} {{ destinationName }} {{ blogPostUrl }} {{ postText }} {{ postArtifact }} {{ truncated }} #}Publish the pinned revision of the LinkedIn post artifact to the connected destination.\n\nInputs:\n- linkedinArtifactId: {{ linkedinArtifactId }}\n- linkedinRepresentationRevisionId: {{ linkedinRepresentationRevisionId }}\n- linkedinAccountId: {{ linkedinAccountId }}\n- linkedinAccountName: {{ linkedinAccountName }}\n- destinationType: {{ destinationType }}\n- destinationId: {{ destinationId }}\n- destinationName: {{ destinationName }}\n- blogPostUrl: {{ blogPostUrl }}\n- postArtifact: {{ postArtifact }}\n- postText: {{ postText }}\n- truncated: {{ truncated }}",
         "cinatra_llm": {
           "preferredProvider": "openai",
@@ -943,7 +947,7 @@
             }
           ],
           "packageName": "@cinatra-ai/blog-linkedin-publish-agent",
-          "description": "Single ApiNode -> /api/llm-bridge. metadata.cinatra.toolboxes is INTENTIONALLY OMITTED so the model reaches the LinkedIn connector's linkedin_post_publish through the injected Cinatra self-MCP. This node is the publishing step (publishes: true): the run stops in front of it on the host's publish confirmation, which shows the post and its destination (publishRows) and lets a person release or decline it; the recipe keeps no confirmation of its own. What is published is the revision the person continued with. The node emits addressPatch — the three literal address keys, each the empty string in the partial and failure envelopes; the partial envelope keeps the returned address or id in the top-level receipt outputs — which the write_address step merges onto the artifact."
+          "description": "Single ApiNode -> /api/llm-bridge. metadata.cinatra.toolboxes is INTENTIONALLY OMITTED so the model reaches the LinkedIn connector's linkedin_post_publish through the injected Cinatra self-MCP. This node is the publishing step (publishes: true): the run stops in front of it on the host's publish confirmation, which shows the post and its destination (publishRows) and lets a person release or decline it; the recipe keeps no confirmation of its own. What is published is the revision the review approved: the revision the person continued with, or the successor a Regenerate made and the person then approved. The node emits addressPatch — the three literal address keys, each the empty string in the partial and failure envelopes; the partial envelope keeps the returned address or id in the top-level receipt outputs — which the write_address step merges onto the artifact."
         }
       }
     },

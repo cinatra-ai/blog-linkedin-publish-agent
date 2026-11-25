@@ -57,14 +57,16 @@ test("the artifact reference is what the person is asked for", () => {
   ).toContain("blogPostUrl");
 });
 
-test("the copy comes from the PINNED revision, read through the host's primitive", () => {
-  const read = passthroughNodes().get("artifact_content_read");
-  expect(read, "a deterministic node reads the artifact's content").toBeTruthy();
-  expect(read.data.input.artifactId).toBe("{{ linkedinArtifactId }}");
+test("the copy comes from the revision the review APPROVED, read through the pack's declared tool", () => {
+  const read = node("read_post_text");
+  expect(read.data.tool, "the read runs the module this pack declares").toBe("extension_tool");
+  expect(read.data.input.name).toBe("approved_post_text");
+  expect(read.data.input.input.artifactId, "the artifact under review").toBe("{{ linkedinArtifactId }}");
   expect(
-    read.data.input.representationRevisionId,
-    "the read is pinned to the revision the person continued with, never the latest",
-  ).toBe("{{ linkedinRepresentationRevisionId }}");
+    read.data.input.input.reviewDecision,
+    "the revision is the one the review's answer names, never the latest and never the start input",
+  ).toBe("{{ reviewApproval }}");
+  expect(JSON.stringify(read.data)).not.toMatch(/linkedinRepresentationRevisionId/);
   expect(read.metadata.cinatra.riskClass).toBe("read_only");
 });
 
@@ -339,7 +341,7 @@ const edgeInto = (dn, di) =>
   );
 
 test("a cut-short read is never posted as the pinned revision", () => {
-  const read = passthroughNodes().get("artifact_content_read");
+  const read = node("read_post_text");
   expect(titles(read.outputs), "the host's read reports truncation").toContain("truncated");
   expect(
     titles(bridgeNode().inputs),
